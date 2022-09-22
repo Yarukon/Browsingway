@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-		<TargetFramework>net6.0-windows</TargetFramework>
+		<TargetFramework>net5.0-windows</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<Configurations>Release;Debug</Configurations>
@@ -21,7 +21,7 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<DalamudLibPath>$(appdata)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
+		<DalamudLibPath>..\..\DalamudDep\</DalamudLibPath>
 	</PropertyGroup>
 	
 	<ItemGroup>

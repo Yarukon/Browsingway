@@ -167,7 +167,7 @@ internal class Inlay : IDisposable
 		else if (_textureRenderException != null)
 		{
 			ImGui.PushStyleColor(ImGuiCol.Text, 0xFF0000FF);
-			ImGui.Text("An error occured while building the browser inlay texture:");
+			ImGui.Text("在构建嵌入式浏览器材质时发生问题:");
 			ImGui.Text(_textureRenderException.ToString());
 			ImGui.PopStyleColor();
 		}

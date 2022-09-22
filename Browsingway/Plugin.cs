@@ -22,6 +22,8 @@ public class Plugin : IDalamudPlugin
 	private RenderProcess? _renderProcess;
 	private Settings? _settings;
 
+	private readonly string _runtimeDir;
+
 	public Plugin()
 	{
 		_pluginDir = PluginInterface.AssemblyLocation.DirectoryName ?? "";
@@ -31,6 +33,8 @@ public class Plugin : IDalamudPlugin
 		}
 
 		_pluginConfigDir = PluginInterface.GetPluginConfigDirectory();
+
+		_runtimeDir = string.Format(@"{0}..\..\runtime", PluginInterface.ConfigFile.DirectoryName);
 
 		_dependencyManager = new DependencyManager(_pluginDir, _pluginConfigDir);
 		_dependencyManager.DependenciesReady += (_, _) => DependenciesReady();
@@ -86,7 +90,7 @@ public class Plugin : IDalamudPlugin
 		// Boot the render process. This has to be done before initialising settings to prevent a
 		// race condition inlays receiving a null reference.
 		int pid = Process.GetCurrentProcess().Id;
-		_renderProcess = new RenderProcess(pid, _pluginDir, _pluginConfigDir, _dependencyManager);
+		_renderProcess = new RenderProcess(pid, _pluginDir, _pluginConfigDir, _runtimeDir, _dependencyManager);
 		_renderProcess.Receive += HandleIpcRequest;
 		_renderProcess.Start();
 

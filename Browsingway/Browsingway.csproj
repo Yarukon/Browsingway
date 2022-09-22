@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net6.0-windows</TargetFramework>
+		<TargetFramework>net5.0-windows</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<Configurations>Release;Debug</Configurations>
@@ -15,11 +15,11 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<DalamudLibPath>$(appdata)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
+		<DalamudLibPath>..\..\DalamudDep\</DalamudLibPath>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="DalamudPackager" Version="2.1.8" />
+		<PackageReference Include="DalamudPackager" Version="2.1.7" />
 		<PackageReference Include="SharedMemory" Version="2.3.2" />
 	</ItemGroup>
 

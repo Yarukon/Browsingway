@@ -18,12 +18,15 @@ internal class RenderProcess : IDisposable
 	private readonly int _parentPid;
 	private readonly string _pluginDir;
 
+	private readonly string _runtimeDir;
+
 	private Process _process;
 	private bool _running;
 
 	public RenderProcess(int pid,
 		string pluginDir,
 		string configDir,
+		string runtimeDir,
 		DependencyManager dependencyManager
 	)
 	{
@@ -32,6 +35,7 @@ internal class RenderProcess : IDisposable
 		_dependencyManager = dependencyManager;
 		_pluginDir = pluginDir;
 		_configDir = configDir;
+		_runtimeDir = runtimeDir;
 		_parentPid = pid;
 
 		_ipc = new IpcBuffer<UpstreamIpcRequest, DownstreamIpcRequest>(_ipcChannelName, request => Receive?.Invoke(this, request));
@@ -136,7 +140,9 @@ internal class RenderProcess : IDisposable
 			RedirectStandardOutput = true,
 			RedirectStandardError = true
 		};
-		string runtimePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "XIVLauncher", "runtime");
+
+		string runtimePath = _runtimeDir;
+
 		if (!process.StartInfo.EnvironmentVariables.ContainsKey("DOTNET_ROOT"))
 			process.StartInfo.EnvironmentVariables.Add("DOTNET_ROOT", runtimePath);
 

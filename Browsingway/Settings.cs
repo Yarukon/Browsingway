@@ -62,7 +62,7 @@ internal class Settings : IDisposable
 		// Ensure there's enough arguments
 		if (args.Length < 3)
 		{
-			Chat.PrintError("Invalid inlay command. Supported syntax: '[inlayCommandName] [setting] [value]'");
+			Chat.PrintError("无效嵌入式窗口指令. 支持的参数: '[inlayCommandName] [setting] [value]'");
 			return;
 		}
 
@@ -71,7 +71,7 @@ internal class Settings : IDisposable
 		if (targetConfig == null)
 		{
 			Chat.PrintError(
-				$"Unknown inlay '{args[0]}'.");
+				$"未知嵌入式窗口 '{args[0]}'.");
 			return;
 		}
 
@@ -96,7 +96,7 @@ internal class Settings : IDisposable
 				break;
 			default:
 				Chat.PrintError(
-					$"Unknown setting '{args[1]}. Valid settings are: url,hidden,locked,clickthrough.");
+					$"未知设定 '{args[1]}. 有效设定为: url,hidden,locked,clickthrough.");
 				return;
 		}
 
@@ -123,7 +123,7 @@ internal class Settings : IDisposable
 				break;
 			default:
 				Chat.PrintError(
-					$"Unknown boolean value '{value}. Valid values are: on,off,toggle.");
+					$"无效布尔值 '{value}. 可用参数有: on,off,toggle.");
 				break;
 		}
 	}
@@ -155,7 +155,7 @@ internal class Settings : IDisposable
 
 	private InlayConfiguration? AddNewInlay()
 	{
-		InlayConfiguration? inlayConfig = new() { Guid = Guid.NewGuid(), Name = "New inlay", Url = "about:blank" };
+		InlayConfiguration? inlayConfig = new() { Guid = Guid.NewGuid(), Name = "新的嵌入式窗口", Url = "about:blank" };
 		Config.Inlays.Add(inlayConfig);
 		InlayAdded?.Invoke(this, inlayConfig);
 		SaveSettings();
@@ -223,7 +223,7 @@ internal class Settings : IDisposable
 		                               | ImGuiWindowFlags.NoScrollbar
 		                               | ImGuiWindowFlags.NoScrollWithMouse
 		                               | ImGuiWindowFlags.NoCollapse;
-		ImGui.Begin("Browsingway Settings", ref _open, windowFlags);
+		ImGui.Begin("Browsingway 设置", ref _open, windowFlags);
 
 		RenderPaneSelector();
 
@@ -257,7 +257,7 @@ internal class Settings : IDisposable
 		ImGui.BeginChild("panes", new Vector2(selectorWidth, -ImGui.GetFrameHeightWithSpacing()), true);
 
 		// General settings
-		if (ImGui.Selectable("General", _selectedInlay == null))
+		if (ImGui.Selectable("通常", _selectedInlay == null))
 		{
 			_selectedInlay = null;
 		}
@@ -265,7 +265,7 @@ internal class Settings : IDisposable
 		// Inlay selector list
 		ImGui.Dummy(new Vector2(0, 5));
 		ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
-		ImGui.Text("- Inlays -");
+		ImGui.Text("- 嵌入式窗口 -");
 		ImGui.PopStyleVar();
 		foreach (InlayConfiguration? inlayConfig in Config?.Inlays!)
 		{
@@ -314,42 +314,42 @@ internal class Settings : IDisposable
 	{
 		bool dirty = false;
 
-		ImGui.Text("Select an inlay on the left to edit its settings.");
+		ImGui.Text("在左侧选择一个嵌入式窗口来更改设置.");
 
-		if (ImGui.CollapsingHeader("Command Help", ImGuiTreeNodeFlags.DefaultOpen))
+		if (ImGui.CollapsingHeader("指令帮助", ImGuiTreeNodeFlags.DefaultOpen))
 		{
 			// TODO: If this ever gets more than a few options, should probably colocate help with the defintion. Attributes?
 			ImGui.Text("/bw config");
-			ImGui.Text("Open this configuration window.");
+			ImGui.Text("打开配置窗口.");
 			ImGui.Dummy(new Vector2(0, 5));
 			ImGui.Text("/bw inlay [inlayCommandName] [setting] [value]");
 			ImGui.TextWrapped(
-				"Change a setting for an inlay.\n" +
-				"\tinlayCommandName: The inlay to edit. Use the 'Command Name' shown in its config.\n" +
-				"\tsetting: Value to change. Accepted settings are:\n" +
+				"更改一个嵌入式窗口的设置.\n" +
+				"\tinlayCommandName: 要编辑的窗口. 使用 '指令名称' 来显示它的当前设定.\n" +
+				"\tsetting: 要更改的设定. 支持的设定有:\n" +
 				"\t\turl: string\n" +
 				"\t\tlocked: boolean\n" +
 				"\t\thidden: boolean\n" +
 				"\t\ttypethrough: boolean\n" +
 				"\t\tclickthrough: boolean\n" +
-				"\tvalue: Value to set for the setting. Accepted values are:\n" +
-				"\t\tstring: any string value\n\t\tboolean: on, off, toggle");
+				"\tvalue: 要设置的值. 支持的值有:\n" +
+				"\t\tstring: 任何字符串\n\t\tboolean: on, off, toggle");
 		}
 
-		if (ImGui.CollapsingHeader("Advanced Settings"))
+		if (ImGui.CollapsingHeader("高级设置"))
 		{
 			IEnumerable<string> options = _availableTransports.Select(transport => transport.ToString());
 			int currentIndex = _availableTransports.IndexOf(Config.FrameTransportMode);
 
 			if (_availableTransports.Count == 0)
 			{
-				options = options.Append("Initialising...");
+				options = options.Append("初始化...");
 				currentIndex = 0;
 			}
 
 			if (options.Count() <= 1) { ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f); }
 
-			bool transportChanged = ImGui.Combo("Frame transport", ref currentIndex, options.ToArray(), options.Count());
+			bool transportChanged = ImGui.Combo("帧传输", ref currentIndex, options.ToArray(), options.Count());
 			if (options.Count() <= 1) { ImGui.PopStyleVar(); }
 
 			// TODO: Flipping this should probably try to rebuild existing inlays
@@ -362,7 +362,7 @@ internal class Settings : IDisposable
 			if (Config.FrameTransportMode == FrameTransportMode.BitmapBuffer)
 			{
 				ImGui.PushStyleColor(ImGuiCol.Text, 0xFF0000FF);
-				ImGui.TextWrapped("The bitmap buffer frame transport is a fallback, and should only be used if no other options work for you. It is not as stable as the shared texture option.");
+				ImGui.TextWrapped("位图缓冲区帧传输是一种后备功能, 只有在没有其他选项适合你的情况下才使用. 它不如共享纹理选项稳定.");
 				ImGui.PopStyleColor();
 			}
 		}
@@ -376,17 +376,17 @@ internal class Settings : IDisposable
 
 		ImGui.PushID(inlayConfig.Guid.ToString());
 
-		dirty |= ImGui.InputText("Name", ref inlayConfig.Name, 100);
+		dirty |= ImGui.InputText("名称", ref inlayConfig.Name, 100);
 
 		ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
 		string? commandName = GetInlayCommandName(inlayConfig);
-		ImGui.InputText("Command Name", ref commandName, 100);
+		ImGui.InputText("指令名称", ref commandName, 100);
 		ImGui.PopStyleVar();
 
 		dirty |= ImGui.InputText("URL", ref inlayConfig.Url, 1000);
 		if (ImGui.IsItemDeactivatedAfterEdit()) { NavigateInlay(inlayConfig); }
 
-		if (ImGui.InputFloat("Zoom", ref inlayConfig.Zoom, 1f, 10f, "%.0f%%"))
+		if (ImGui.InputFloat("缩放", ref inlayConfig.Zoom, 1f, 10f, "%.0f%%"))
 		{
 			// clamp to allowed range 
 			if (inlayConfig.Zoom < 10f)
@@ -404,7 +404,7 @@ internal class Settings : IDisposable
 			UpdateZoomInlay(inlayConfig);
 		}
 
-		if (ImGui.InputFloat("Opacity", ref inlayConfig.Opacity, 1f, 10f, "%.0f%%"))
+		if (ImGui.InputFloat("透明度", ref inlayConfig.Opacity, 1f, 10f, "%.0f%%"))
 		{
 			// clamp to allowed range 
 			if (inlayConfig.Opacity < 10f)
@@ -419,7 +419,7 @@ internal class Settings : IDisposable
 			dirty = true;
 		}
 
-		if (ImGui.InputInt("Framerate", ref inlayConfig.Framerate, 1, 10))
+		if (ImGui.InputInt("帧率", ref inlayConfig.Framerate, 1, 10))
 		{
 			// clamp to allowed range 
 			if (inlayConfig.Framerate < 1)
@@ -445,39 +445,39 @@ internal class Settings : IDisposable
 		bool true_ = true;
 		if (inlayConfig.ClickThrough) { ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f); }
 
-		dirty |= ImGui.Checkbox("Locked", ref inlayConfig.ClickThrough ? ref true_ : ref inlayConfig.Locked);
+		dirty |= ImGui.Checkbox("锁定窗口", ref inlayConfig.ClickThrough ? ref true_ : ref inlayConfig.Locked);
 		if (inlayConfig.ClickThrough) { ImGui.PopStyleVar(); }
 
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("Prevent the inlay from being resized or moved. This is implicitly set by Click Through."); }
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("防止窗口被拖动或调整大小. 会被点击穿透进行隐式设置."); }
 
 		ImGui.NextColumn();
 
-		dirty |= ImGui.Checkbox("Hidden", ref inlayConfig.Hidden);
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("Hide the inlay. This does not stop the inlay from executing, only from being displayed."); }
+		dirty |= ImGui.Checkbox("隐藏", ref inlayConfig.Hidden);
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("隐藏窗口. 这不会阻止窗口继续运行，只会停止渲染."); }
 
 		ImGui.NextColumn();
 
 
 		if (inlayConfig.ClickThrough) { ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f); }
 
-		dirty |= ImGui.Checkbox("Type Through", ref inlayConfig.ClickThrough ? ref true_ : ref inlayConfig.TypeThrough);
+		dirty |= ImGui.Checkbox("输入穿透", ref inlayConfig.ClickThrough ? ref true_ : ref inlayConfig.TypeThrough);
 		if (inlayConfig.ClickThrough) { ImGui.PopStyleVar(); }
 
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("Prevent the inlay from intercepting any keyboard events. Implicitly set by Click Through."); }
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("防止窗口被任何键盘事件影响. 会被点击穿透进行隐式设置."); }
 
 		ImGui.NextColumn();
 
-		dirty |= ImGui.Checkbox("Click Through", ref inlayConfig.ClickThrough);
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("Prevent the inlay from intercepting any mouse events. Implicitly sets Locked and Type Through."); }
+		dirty |= ImGui.Checkbox("点击穿透", ref inlayConfig.ClickThrough);
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("防止窗口被任何鼠标事件影响. 会隐式设置输入穿透和锁定窗口."); }
 
 		ImGui.NextColumn();
 
 		ImGui.Columns(1);
 
-		if (ImGui.Button("Reload")) { ReloadInlay(inlayConfig); }
+		if (ImGui.Button("重载")) { ReloadInlay(inlayConfig); }
 
 		ImGui.SameLine();
-		if (ImGui.Button("Open Dev Tools")) { DebugInlay(inlayConfig); }
+		if (ImGui.Button("打开开发者工具")) { DebugInlay(inlayConfig); }
 
 		ImGui.PopID();
 

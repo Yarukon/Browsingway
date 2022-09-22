@@ -6,6 +6,8 @@ using System.Net;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Web;
 
 namespace Browsingway;
 
@@ -34,7 +36,7 @@ internal class DependencyManager : IDisposable
 	private const short _depComplete = -2;
 	private const short _depFailed = -3;
 
-	private static readonly Dependency[] _dependencies = { new("https://github.com/Styr1x/Browsingway/releases/download/cef-binaries/cefsharp-{VERSION}.zip", "cef", "103.0.8+g444ebe7+chromium-103.0.5060.66", "ECFFE5E04C1BC04C256EC509FB4AF2B0E9066D1F4F0B8BA3F537FEF0D30980FB") };
+	private static readonly Dependency[] _dependencies = { new("https://oss.yarukon.me/browsingway/cefsharp-{VERSION}.zip", "cef", "103.0.8+g444ebe7+chromium-103.0.5060.66", "ECFFE5E04C1BC04C256EC509FB4AF2B0E9066D1F4F0B8BA3F537FEF0D30980FB") };
 	private readonly string _debugCheckDir;
 
 	private readonly string _dependencyDir;
@@ -125,7 +127,7 @@ internal class DependencyManager : IDisposable
 			args.ProgressPercentage,
 			(key, oldValue) => Math.Max(oldValue, args.ProgressPercentage));
 		await client.DownloadFileTaskAsync(
-			dependency.Url.Replace("{VERSION}", dependency.Version),
+			dependency.Url.Replace("{VERSION}", HttpUtility.UrlEncode(dependency.Version)),
 			filePath);
 
 		// Download complete, mark as extracting
@@ -195,7 +197,7 @@ internal class DependencyManager : IDisposable
 		if (_viewMode == ViewMode.Hidden) { return; }
 
 		ImGuiWindowFlags windowFlags = ImGuiWindowFlags.AlwaysAutoResize;
-		ImGui.Begin("Browsingway dependencies", windowFlags);
+		ImGui.Begin("Browsingway 依赖", windowFlags);
 		//ImGui.SetWindowFocus();
 
 		switch (_viewMode)
@@ -219,7 +221,7 @@ internal class DependencyManager : IDisposable
 
 	private void RenderConfirm()
 	{
-		ImGui.Text("The following dependencies are currently missing:");
+		ImGui.Text("下列依赖未找到:");
 
 		if (_missingDependencies == null) { return; }
 
@@ -233,12 +235,12 @@ internal class DependencyManager : IDisposable
 
 		ImGui.Separator();
 
-		if (ImGui.Button("Install missing dependencies")) { InstallDependencies(); }
+		if (ImGui.Button("安装丢失的依赖")) { InstallDependencies(); }
 	}
 
 	private void RenderInstalling()
 	{
-		ImGui.Text("Installing dependencies...");
+		ImGui.Text("正在安装依赖...");
 
 		ImGui.Separator();
 
@@ -247,7 +249,7 @@ internal class DependencyManager : IDisposable
 
 	private void RenderComplete()
 	{
-		ImGui.Text("Dependency installation complete!");
+		ImGui.Text("依赖安装完毕!");
 
 		ImGui.Separator();
 
@@ -255,14 +257,14 @@ internal class DependencyManager : IDisposable
 
 		ImGui.Separator();
 
-		if (ImGui.Button("OK", new Vector2(100, 0))) { CheckDependencies(); }
+		if (ImGui.Button("确定", new Vector2(100, 0))) { CheckDependencies(); }
 	}
 
 	private void RenderFailed()
 	{
-		ImGui.Text("One or more dependencies failed to install successfully.");
-		ImGui.Text("This is usually caused by network interruptions. Please retry.");
-		ImGui.Text("If this keeps happening, let us know on discord.");
+		ImGui.Text("有1个或多个依赖安装失败.");
+		ImGui.Text("这通常是因为网络问题导致的. 请重试.");
+		ImGui.Text("如果该问题持续发生, 那就继续重试吧.");
 
 		ImGui.Separator();
 
@@ -270,7 +272,7 @@ internal class DependencyManager : IDisposable
 
 		ImGui.Separator();
 
-		if (ImGui.Button("Retry", new Vector2(100, 0))) { CheckDependencies(); }
+		if (ImGui.Button("重试", new Vector2(100, 0))) { CheckDependencies(); }
 	}
 
 	private void RenderDownloadProgress()
@@ -279,12 +281,12 @@ internal class DependencyManager : IDisposable
 
 		foreach (KeyValuePair<string, float> progress in _installProgress)
 		{
-			if (progress.Value == _depExtracting) { ImGui.ProgressBar(1, progressSize, "Extracting"); }
-			else if (progress.Value == _depComplete) { ImGui.ProgressBar(1, progressSize, "Complete"); }
+			if (progress.Value == _depExtracting) { ImGui.ProgressBar(1, progressSize, "解压"); }
+			else if (progress.Value == _depComplete) { ImGui.ProgressBar(1, progressSize, "完毕"); }
 			else if (progress.Value == _depFailed)
 			{
 				ImGui.PushStyleColor(ImGuiCol.PlotHistogram, 0xAA0000FF);
-				ImGui.ProgressBar(1, progressSize, "Error");
+				ImGui.ProgressBar(1, progressSize, "错误");
 				ImGui.PopStyleColor();
 			}
 			else { ImGui.ProgressBar(progress.Value / 100, progressSize); }
