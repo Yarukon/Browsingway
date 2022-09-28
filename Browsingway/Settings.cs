@@ -57,9 +57,16 @@ internal class Settings : IDisposable
 
 	public void HandleRefreshAllCommand()
 	{
-		foreach (InlayConfiguration? inlayConfig in Config.Inlays)
+		if (Config.Inlays.Count > 0)
 		{
-			ReloadInlay(inlayConfig);
+			foreach (InlayConfiguration? inlayConfig in Config.Inlays)
+			{
+				ReloadInlay(inlayConfig);
+			}
+			Chat.Print("已向所有嵌入式窗口发送刷新操作!");
+		} else
+		{
+			Chat.PrintError("你还没有创建嵌入式窗口!");
 		}
 	}
 

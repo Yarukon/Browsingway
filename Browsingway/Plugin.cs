@@ -215,7 +215,7 @@ public class Plugin : IDalamudPlugin
 		if (args.Length == 0)
 		{
 			Chat.PrintError(
-				"No subcommand specified. Valid subcommands are: config,inlay.");
+				"未指定子指令. 有效的子指令为: config,refresh,inlay.");
 			return;
 		}
 
@@ -234,7 +234,7 @@ public class Plugin : IDalamudPlugin
 				break;
 			default:
 				Chat.PrintError(
-					$"Unknown subcommand '{args[0]}'. Valid subcommands are: config,inlay.");
+					$"未知子指令 '{args[0]}'. 有效的子指令为: config,refresh,inlay.");
 				break;
 		}
 	}
