@@ -107,7 +107,7 @@ public class Plugin : IDalamudPlugin
 		}
 
 		// Hook up the main BW command
-		CommandManager.AddHandler(_command, new CommandInfo(HandleCommand) { HelpMessage = "Control Browsingway from the chat line! Type '/bw config' or open the settings for more info.", ShowInHelp = true });
+		CommandManager.AddHandler(_command, new CommandInfo(HandleCommand) { HelpMessage = "从聊天栏控制 Browsingway! 输入 '/bw config' 或打开设置菜单获取更多信息.", ShowInHelp = true });
 	}
 
 	private (bool, long) OnWndProc(WindowsMessage msg, ulong wParam, long lParam)
@@ -228,6 +228,9 @@ public class Plugin : IDalamudPlugin
 				break;
 			case "inlay":
 				_settings?.HandleInlayCommand(subcommandArgs);
+				break;
+			case "refresh":
+				_settings?.HandleRefreshAllCommand();
 				break;
 			default:
 				Chat.PrintError(

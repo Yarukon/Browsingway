@@ -55,6 +55,14 @@ internal class Settings : IDisposable
 		// TODO: Add further config handling if required here.
 	}
 
+	public void HandleRefreshAllCommand()
+	{
+		foreach (InlayConfiguration? inlayConfig in Config.Inlays)
+		{
+			ReloadInlay(inlayConfig);
+		}
+	}
+
 	public void HandleInlayCommand(string rawArgs)
 	{
 		string[] args = rawArgs.Split(null as char[], 3, StringSplitOptions.RemoveEmptyEntries);
@@ -321,6 +329,8 @@ internal class Settings : IDisposable
 			// TODO: If this ever gets more than a few options, should probably colocate help with the defintion. Attributes?
 			ImGui.Text("/bw config");
 			ImGui.Text("打开配置窗口.");
+			ImGui.Text("/bw refresh");
+			ImGui.Text("刷新所有的嵌入式窗口.");
 			ImGui.Dummy(new Vector2(0, 5));
 			ImGui.Text("/bw inlay [inlayCommandName] [setting] [value]");
 			ImGui.TextWrapped(
@@ -474,7 +484,7 @@ internal class Settings : IDisposable
 
 		ImGui.Columns(1);
 
-		if (ImGui.Button("重载")) { ReloadInlay(inlayConfig); }
+		if (ImGui.Button("刷新")) { ReloadInlay(inlayConfig); }
 
 		ImGui.SameLine();
 		if (ImGui.Button("打开开发者工具")) { DebugInlay(inlayConfig); }
