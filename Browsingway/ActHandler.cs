@@ -50,7 +50,7 @@ public class ActHandler
 			// check for CafeACT
 			} else if ((proc = Process.GetProcessesByName("CafeACT").FirstOrDefault()) is not null)
 			{
-				// this have to use '&&' state cuz it needs ACT fully loaded
+				// have to use '&&' state cuz it needs ACT fully loaded
 				if (proc.MainWindowTitle.Contains("ACT国服整合") && (DateTime.Now - proc.StartTime).TotalSeconds >= 5)
 				{
 					if (!IsRunning)
