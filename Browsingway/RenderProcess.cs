@@ -191,8 +191,9 @@ internal class RenderProcess : IDisposable
 
 		string runtimePath = _runtimeDir;
 
-		if (!process.StartInfo.EnvironmentVariables.ContainsKey("DOTNET_ROOT"))
-			process.StartInfo.EnvironmentVariables.Add("DOTNET_ROOT", runtimePath);
+		// ensure Dalamud's runtime is used even if there's a system runtime, to avoid runtime version mismatches
+		process.StartInfo.EnvironmentVariables.Remove("DOTNET_ROOT");
+		process.StartInfo.EnvironmentVariables.Add("DOTNET_ROOT", runtimePath);
 
 		process.OutputDataReceived += (_, args) => PluginLog.Log($"[Render]: {args.Data}");
 		process.ErrorDataReceived += (_, args) => PluginLog.LogError($"[Render]: {args.Data}");

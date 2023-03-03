@@ -2,6 +2,7 @@
 using Dalamud.Game.Command;
 using Dalamud.Game.Gui;
 using Dalamud.IoC;
+using Dalamud.Logging;
 using Dalamud.Plugin;
 using ImGuiNET;
 using System.Diagnostics;
@@ -20,6 +21,7 @@ public class Plugin : IDalamudPlugin
 	private readonly string _pluginDir;
 
 	private RenderProcess? _renderProcess;
+	private ActHandler _actHandler;
 	private Settings? _settings;
 
 	private readonly string _runtimeDir;
@@ -36,10 +38,12 @@ public class Plugin : IDalamudPlugin
 
 		_runtimeDir = string.Format(@"{0}..\..\runtime", PluginInterface.ConfigFile.DirectoryName);
 
+		_actHandler = new ActHandler();
+		
 		_dependencyManager = new DependencyManager(_pluginDir, _pluginConfigDir);
 		_dependencyManager.DependenciesReady += (_, _) => DependenciesReady();
 		_dependencyManager.Initialise();
-
+		
 		// Hook up render hook
 		PluginInterface.UiBuilder.Draw += Render;
 	}
@@ -93,7 +97,7 @@ public class Plugin : IDalamudPlugin
 		_renderProcess = new RenderProcess(pid, _pluginDir, _pluginConfigDir, _runtimeDir, _dependencyManager);
 		_renderProcess.Receive += HandleIpcRequest;
 		_renderProcess.Start();
-
+		
 		// Prep settings
 		_settings = PluginInterface.Create<Settings>();
 		if (_settings is not null)
@@ -103,19 +107,26 @@ public class Plugin : IDalamudPlugin
 			_settings.InlayDebugged += OnInlayDebugged;
 			_settings.InlayRemoved += OnInlayRemoved;
 			_settings.InlayZoomed += OnInlayZoomed;
+			_settings.InlayMuted += OnInlayMuted;
 			_settings.TransportChanged += OnTransportChanged;
+			_actHandler.AvailabilityChanged += OnActAvailabilityChanged;
 		}
-
+		
 		// Hook up the main BW command
 		CommandManager.AddHandler(_command, new CommandInfo(HandleCommand) { HelpMessage = "从聊天栏控制 Browsingway! 输入 '/bw config' 或打开设置菜单获取更多信息.", ShowInHelp = true });
 	}
-
+	
 	private (bool, long) OnWndProc(WindowsMessage msg, ulong wParam, long lParam)
 	{
 		// Notify all the inlays of the wndproc, respond with the first capturing response (if any)
 		// TODO: Yeah this ain't great but realistically only one will capture at any one time for now.
 		IEnumerable<(bool, long)> responses = _inlays.Select(pair => pair.Value.WndProcMessage(msg, wParam, lParam));
 		return responses.FirstOrDefault(pair => pair.Item1);
+	}
+	
+	private void OnActAvailabilityChanged(object? sender, bool e)
+	{
+		_settings?.OnActAvailabilityChanged(e);
 	}
 
 	private void OnInlayAdded(object? sender, InlayConfiguration inlayConfig)
@@ -152,6 +163,12 @@ public class Plugin : IDalamudPlugin
 	{
 		Inlay inlay = _inlays[config.Guid];
 		inlay.Zoom(config.Zoom);
+	}
+
+	private void OnInlayMuted(object? sender, InlayConfiguration config)
+	{
+		Inlay inlay = _inlays[config.Guid];
+		inlay.Mute(config.Muted);
 	}
 
 	private void OnTransportChanged(object? sender, EventArgs unused)
@@ -200,6 +217,7 @@ public class Plugin : IDalamudPlugin
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(0, 0));
 
 		_renderProcess?.EnsureRenderProcessIsAlive();
+		_actHandler.Check();
 
 		foreach (Inlay inlay in _inlays.Values) { inlay.Render(); }
 

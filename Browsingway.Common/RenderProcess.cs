@@ -57,10 +57,12 @@ public class NewInlayRequest : DownstreamIpcRequest
 	public int Framerate;
 	public FrameTransportMode FrameTransportMode;
 	public Guid Guid;
+	public string Id;
 	public int Height;
 	public string Url = null!;
 	public int Width;
 	public float Zoom;
+	public bool Muted;
 }
 
 [Serializable]
@@ -101,6 +103,13 @@ public class ZoomInlayRequest : DownstreamIpcRequest
 {
 	public Guid Guid;
 	public float Zoom;
+}
+
+[Serializable]
+public class MuteInlayRequest : DownstreamIpcRequest
+{
+	public Guid Guid;
+	public bool Mute;
 }
 
 [Serializable]
@@ -164,11 +173,9 @@ public enum KeyEventType
 public class KeyEventRequest : DownstreamIpcRequest
 {
 	public Guid Guid;
-	public InputModifier Modifier;
-	public int NativeKeyCode;
-	public bool SystemKey;
-	public KeyEventType Type;
-	public int UserKeyCode;
+	public int Msg;
+	public int WParam;
+	public int LParam;
 }
 
 #endregion

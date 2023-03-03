@@ -10,7 +10,10 @@
         "inlay",
         "overlay",
         "chromium",
-        "act"
+        "act",
+        "youtube",
+        "website",
+        "video"
     ],
-    "Changelog": "Fix performance regression on certain system configurations (by karashiiro)"
+    "Changelog": "- Add IINACT support.\n- Fix ACT not detected when running as tray icon.\n- Fix overlays using global context."
 }

@@ -46,9 +46,7 @@ internal static class Program
 		_parentWatchThread = new Thread(WatchParentStatus);
 		_parentWatchThread.Start(args.ParentPid);
 
-#if DEBUG
 		AppDomain.CurrentDomain.FirstChanceException += (_, e) => Console.Error.WriteLine(e.Exception.ToString());
-#endif
 
 		bool dxRunning = DxHandler.Initialise(args.DxgiAdapterLuid);
 		CefHandler.Initialise(_cefAssemblyDir, args.CefCacheDir, args.ParentPid);
@@ -163,6 +161,12 @@ internal static class Program
 						inlay.HandleKeyEvent(keyEventRequest);
 						return null;
 					}
+				case MuteInlayRequest muteRequest:
+					{
+						Inlay inlay = _inlays[muteRequest.Guid];
+						inlay.Mute(muteRequest.Mute);
+						return null;
+					}
 
 				default:
 					throw new Exception($"Unknown IPC request type {request?.GetType().Name} received.");
@@ -185,8 +189,8 @@ internal static class Program
 			_inlays[request.Guid].Dispose();
 			_inlays.Remove(request.Guid);
 		}
-
-		Inlay inlay = new(request.Url, request.Zoom, request.Framerate, renderHandler);
+		
+		Inlay inlay = new( request.Id, request.Url, request.Zoom, request.Muted, request.Framerate, renderHandler);
 		inlay.Initialise();
 		_inlays.Add(request.Guid, inlay);
 
