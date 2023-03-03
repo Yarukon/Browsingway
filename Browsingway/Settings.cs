@@ -409,7 +409,7 @@ internal class Settings : IDisposable
 
 			if (options.Count() <= 1) { ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f); }
 
-			bool transportChanged = ImGui.Combo("帧传输", ref currentIndex, options.ToArray(), options.Count());
+			bool transportChanged = ImGui.Combo("帧传输模式", ref currentIndex, options.ToArray(), options.Count());
 			if (options.Count() <= 1) { ImGui.PopStyleVar(); }
 
 			// TODO: Flipping this should probably try to rebuild existing inlays
@@ -502,7 +502,7 @@ internal class Settings : IDisposable
 		ImGui.SetNextItemWidth(100);
 		ImGui.Columns(2, "boolInlayOptions", false);
 
-		if (ImGui.Checkbox("Disabled", ref inlayConfig.Disabled))
+		if (ImGui.Checkbox("禁用", ref inlayConfig.Disabled))
 		{
 			if (inlayConfig.Disabled)
 				InlayRemoved?.Invoke(this, inlayConfig);
@@ -511,24 +511,24 @@ internal class Settings : IDisposable
 			dirty = true;
 		}
 
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("Disables the inlay. Contrary to just hiding it this setting will stop it from ever being created."); }
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("禁用嵌入式窗口. 与仅隐藏相反, 该设定会防止此嵌入式窗口被创建."); }
 
 		ImGui.NextColumn();
 		ImGui.NextColumn();
 
 
-		if (ImGui.Checkbox("Muted", ref inlayConfig.Muted))
+		if (ImGui.Checkbox("静音", ref inlayConfig.Muted))
 		{
 			UpdateMuteInlay(inlayConfig);
 			dirty = true;
 		}
 
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("Enables or disables audio playback."); }
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("启用或禁用音频播放."); }
 
 		ImGui.NextColumn();
 		ImGui.NextColumn();
 
-		if (ImGui.Checkbox("ACT/IINACT optimizations", ref inlayConfig.ActOptimizations))
+		if (ImGui.Checkbox("ACT/IINACT 优化", ref inlayConfig.ActOptimizations))
 		{
 			if (!inlayConfig.Disabled)
 			{
@@ -548,7 +548,7 @@ internal class Settings : IDisposable
 			dirty = true;
 		}
 
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("Enables ACT/IINACT specific optimizations. This will automatically disable the overlay if ACT/IINACT is not running."); }
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("启用针对 ACT/IINACT 的特殊优化. 如果 ACT/IINACT 未在运行的话将不会渲染该嵌入式窗口."); }
 
 		ImGui.NextColumn();
 		ImGui.NextColumn();

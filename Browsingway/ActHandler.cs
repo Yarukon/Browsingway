@@ -33,35 +33,46 @@ public class ActHandler
 				{
 					if (!IsRunning)
 					{
-						IsRunning = true;
-						Interlocked.Exchange(ref _notify, 1);
+						ChangeState(true);
 					}
-
 					return;
 				}
 			}
-			else
+			// check for IINACT
+			else if ((proc = Process.GetProcessesByName("IINACT").FirstOrDefault()) is not null)
 			{
-				// check for IINACT
-				proc = Process.GetProcessesByName("IINACT").FirstOrDefault();
-				if (proc is not null && (DateTime.Now - proc.StartTime).TotalSeconds >= 5)
+				if ((DateTime.Now - proc.StartTime).TotalSeconds >= 5)
 				{
 					if (!IsRunning)
 					{
-						IsRunning = true;
-						Interlocked.Exchange(ref _notify, 1);
+						ChangeState(true);
 					}
-
+					return;
+				}
+			// check for CafeACT
+			} else if ((proc = Process.GetProcessesByName("CafeACT").FirstOrDefault()) is not null)
+			{
+				if (proc.MainWindowTitle.Contains("ACT国服整合") || (DateTime.Now - proc.StartTime).TotalSeconds >= 5)
+				{
+					if (!IsRunning)
+					{
+						ChangeState(true);
+					}
 					return;
 				}
 			}
 
 			if (IsRunning)
 			{
-				IsRunning = false;
-				Interlocked.Exchange(ref _notify, 0);
+				ChangeState(false);
 			}
 		});
+	}
+
+	private void ChangeState(bool state)
+	{
+		IsRunning = state;
+		Interlocked.Exchange(ref _notify, state ? 1 : 0);
 	}
 
 	protected virtual void OnAvailabilityChanged(bool e)
