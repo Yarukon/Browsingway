@@ -32,9 +32,8 @@ public class ActHandler
 				if (proc.MainWindowTitle.Contains("Advanced Combat Tracker") || (DateTime.Now - proc.StartTime).TotalSeconds >= 5)
 				{
 					if (!IsRunning)
-					{
 						ChangeState(true);
-					}
+
 					return;
 				}
 			}
@@ -44,28 +43,25 @@ public class ActHandler
 				if ((DateTime.Now - proc.StartTime).TotalSeconds >= 5)
 				{
 					if (!IsRunning)
-					{
 						ChangeState(true);
-					}
+
 					return;
 				}
 			// check for CafeACT
 			} else if ((proc = Process.GetProcessesByName("CafeACT").FirstOrDefault()) is not null)
 			{
-				if (proc.MainWindowTitle.Contains("ACT国服整合") || (DateTime.Now - proc.StartTime).TotalSeconds >= 5)
+				// this have to use '&&' state cuz it needs ACT fully loaded
+				if (proc.MainWindowTitle.Contains("ACT国服整合") && (DateTime.Now - proc.StartTime).TotalSeconds >= 5)
 				{
 					if (!IsRunning)
-					{
 						ChangeState(true);
-					}
+
 					return;
 				}
 			}
 
 			if (IsRunning)
-			{
 				ChangeState(false);
-			}
 		});
 	}
 
