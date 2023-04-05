@@ -119,7 +119,7 @@ internal static class Program
 							return BuildRenderHandlerResponse(inlay.RenderHandler);
 						}
 
-						return new TextureHandleResponse { TextureHandle = 0 };
+						return new TextureHandleResponse { TextureHandle = IntPtr.Zero };
 					}
 
 				case NavigateInlayRequest navigateInlayRequest:
