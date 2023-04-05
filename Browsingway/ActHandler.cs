@@ -41,19 +41,13 @@ public class ActHandler
 			if (_iinactIpc.InvokeFunc())
 			{
 				if (!IsRunning)
-				{
-					IsRunning = true;
-					Interlocked.Exchange(ref _notify, 1);
-				}
+					ChangeState(true);
 
 				return;
 			}
-			
+
 			if (IsRunning)
-			{
-				IsRunning = false;
-				Interlocked.Exchange(ref _notify, 0);
-			}
+				ChangeState(false);
 
 			return;
 		}
