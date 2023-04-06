@@ -37,7 +37,7 @@ public class Plugin : IDalamudPlugin
 
 		_runtimeDir = string.Format(@"{0}..\..\runtime", PluginInterface.ConfigFile.DirectoryName);
 
-		_actHandler = new ActHandler();
+		_actHandler = new ActHandler(PluginInterface);
 		
 		_dependencyManager = new DependencyManager(_pluginDir, _pluginConfigDir);
 		_dependencyManager.DependenciesReady += (_, _) => DependenciesReady();
