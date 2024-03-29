@@ -13,7 +13,7 @@ public class ActHandler
 	private int _notify = -1;
 	private ICallGateSubscriber<bool> _iinactIpc;
 
-	public ActHandler(DalamudPluginInterface pi)
+	public ActHandler()
 	{
 		_iinactIpc = Services.PluginInterface.GetIpcSubscriber<bool>("IINACT.Server.Listening");
 	}

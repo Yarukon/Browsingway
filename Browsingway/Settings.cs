@@ -63,12 +63,12 @@ internal class Settings : IDisposable
 		{
 			foreach (InlayConfiguration? inlayConfig in Config.Inlays)
 			{
-				ReloadInlay(inlayConfig);
+				ReloadOverlay(inlayConfig);
 			}
-			Chat.Print("已向所有嵌入式窗口发送刷新操作!");
+			Services.Chat.Print("已向所有嵌入式窗口发送刷新操作!");
 		} else
 		{
-			Chat.PrintError("你还没有创建嵌入式窗口!");
+			Services.Chat.PrintError("你还没有创建嵌入式窗口!");
 		}
 	}
 
@@ -79,7 +79,7 @@ internal class Settings : IDisposable
 		// Ensure there's enough arguments
 		if (args.Length < 2 || (args[1] != "reload" && args.Length < 3))
 		{
-			Services.Chat.PrintError("Invalid overlay command. Supported syntax: '[overlayCommandName] [setting] [value]'");
+			Services.Chat.PrintError("无效嵌入式窗口指令. 支持的参数: '[overlayCommandName] [setting] [value]'");
 			return;
 		}
 
@@ -88,7 +88,7 @@ internal class Settings : IDisposable
 		if (targetConfig == null)
 		{
 			Services.Chat.PrintError(
-				$"Unknown overlay '{args[0]}'.");
+				$"未知嵌入式窗口 '{args[0]}'.");
 			return;
 		}
 
@@ -175,7 +175,7 @@ internal class Settings : IDisposable
 
 	private InlayConfiguration? AddNewOverlay()
 	{
-		InlayConfiguration? overlayConfig = new() { Guid = Guid.NewGuid(), Name = "New overlay", Url = "about:blank" };
+		InlayConfiguration? overlayConfig = new() { Guid = Guid.NewGuid(), Name = "新嵌入式窗口", Url = "about:blank" };
 		Config.Inlays.Add(overlayConfig);
 		OverlayAdded?.Invoke(this, overlayConfig);
 		SaveSettings();
@@ -289,7 +289,7 @@ internal class Settings : IDisposable
 		// Overlay selector list
 		ImGui.Dummy(new Vector2(0, 5));
 		ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
-		ImGui.Text("- Overlays -");
+		ImGui.Text("- 嵌入式窗口 -");
 		ImGui.PopStyleVar();
 		foreach (InlayConfiguration? overlayConfig in Config?.Inlays!)
 		{
@@ -338,7 +338,7 @@ internal class Settings : IDisposable
 	{
 		bool dirty = false;
 
-		ImGui.Text("Select an overlay on the left to edit its settings.");
+		ImGui.Text("在左侧选择一个嵌入式窗口来更改设置.");
 
 		if (ImGui.CollapsingHeader("指令帮助", ImGuiTreeNodeFlags.DefaultOpen))
 		{
@@ -502,7 +502,7 @@ internal class Settings : IDisposable
 
 		ImGui.NextColumn();
 
-		dirty |= ImGui.Checkbox("隐藏", ref inlayConfig.Hidden);
+		dirty |= ImGui.Checkbox("隐藏", ref overlayConfig.Hidden);
 		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("隐藏窗口. 这不会阻止窗口继续运行，只会停止渲染."); }
 
 		ImGui.NextColumn();
@@ -516,36 +516,36 @@ internal class Settings : IDisposable
 
 		ImGui.NextColumn();
 
-		dirty |= ImGui.Checkbox("点击穿透", ref inlayConfig.ClickThrough);
+		dirty |= ImGui.Checkbox("点击穿透", ref overlayConfig.ClickThrough);
 		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("防止窗口被任何鼠标事件影响. 会隐式设置输入穿透和锁定窗口."); }
 
 		ImGui.NextColumn();
 
-		dirty |= ImGui.Checkbox("Hide out of combat", ref overlayConfig.HideOutOfCombat);
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("Hide this overlay when out-of-combat."); }
+		dirty |= ImGui.Checkbox("战斗外隐藏", ref overlayConfig.HideOutOfCombat);
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("处于战斗外状态时隐藏该嵌入式窗口."); }
 
 		ImGui.NextColumn();
 		ImGui.NextColumn();
 
 		if (!overlayConfig.HideOutOfCombat) { ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f); }
 
-		dirty |= ImGui.InputInt("Hide Delay", ref overlayConfig.HideDelay);
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("Delay to hide overlay when out-of-combat in seconds."); }
+		dirty |= ImGui.InputInt("隐藏延迟", ref overlayConfig.HideDelay);
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("处于战斗外状态时延时隐藏该嵌入式窗口, 单位为秒."); }
 
 		if (!overlayConfig.HideOutOfCombat) { ImGui.PopStyleVar(); }
 
 		ImGui.Columns(1);
 
 		ImGui.NewLine();
-		if (ImGui.CollapsingHeader("Experimental / Unsupported"))
+		if (ImGui.CollapsingHeader("实验性 / 不受支持的"))
 		{
 			ImGui.NewLine();
-			dirty |= ImGui.Checkbox("Fullscreen", ref overlayConfig.Fullscreen);
+			dirty |= ImGui.Checkbox("全屏", ref overlayConfig.Fullscreen);
 			ImGui.NewLine();
-			if (ImGui.IsItemHovered()) { ImGui.SetTooltip("Automatically makes this overlay cover the entire screen when enabled."); }
+			if (ImGui.IsItemHovered()) { ImGui.SetTooltip("当启用时自动将该嵌入式窗口布满整个游戏窗口."); }
 
-			ImGui.Text("Custom CSS code:");
-			if (ImGui.InputTextMultiline("Custom CSS code", ref overlayConfig.CustomCss, 1000000,
+			ImGui.Text("自定义 CSS 样式代码:");
+			if (ImGui.InputTextMultiline("自定义 CSS 样式代码", ref overlayConfig.CustomCss, 1000000,
 				    new Vector2(-1, ImGui.GetTextLineHeight() * 10)))
 			{
 				dirty = true;

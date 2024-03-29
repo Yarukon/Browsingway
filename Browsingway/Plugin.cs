@@ -40,7 +40,7 @@ public class Plugin : IDalamudPlugin
 
 		_pluginConfigDir = pluginInterface.GetPluginConfigDirectory();
 
-		_runtimeDir = string.Format(@"{0}..\..\runtime", PluginInterface.ConfigFile.DirectoryName);
+		_runtimeDir = string.Format(@"{0}..\..\runtime", Services.PluginInterface.ConfigFile.DirectoryName);
 		_actHandler = new ActHandler();
 
 		_dependencyManager = new DependencyManager(_pluginDir, _pluginConfigDir);
@@ -90,7 +90,7 @@ public class Plugin : IDalamudPlugin
 		{
 			if (!msg.HasDxSharedTexturesSupport)
 			{
-				Services.PluginLog.Error("Could not initialize shared textures transport. Browsingway will not work.");
+				Services.PluginLog.Error("无法初始化共享材质传输. Browsingway 将会无法正常使用.");
 				return;
 			}
 
@@ -122,7 +122,7 @@ public class Plugin : IDalamudPlugin
 				}
 				else
 				{
-					Services.PluginLog.Error("Overlay Id not found");
+					Services.PluginLog.Error("悬浮窗ID未找到");
 				}
 			});
 		};
