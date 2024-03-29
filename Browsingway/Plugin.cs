@@ -1,6 +1,6 @@
 ﻿using Browsingway.Common;
 using Dalamud.Game.Command;
-using Dalamud.Game.Gui;
+using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -16,49 +16,40 @@ public class Plugin : IDalamudPlugin
 	private const string _command = "/bw";
 
 	private readonly DependencyManager _dependencyManager;
-	private readonly Dictionary<Guid, Inlay> _inlays = new();
+	private readonly Dictionary<Guid, Overlay> _overlays = new();
 	private readonly string _pluginConfigDir;
 	private readonly string _pluginDir;
 
 	private RenderProcess? _renderProcess;
 	private ActHandler _actHandler;
 	private Settings? _settings;
+	private Services _services;
 
 	private readonly string _runtimeDir;
 
-	public Plugin()
+	public Plugin(DalamudPluginInterface pluginInterface)
 	{
-		_pluginDir = PluginInterface.AssemblyLocation.DirectoryName ?? "";
+		// init services
+		_services = pluginInterface.Create<Services>()!;
+
+		_pluginDir = pluginInterface.AssemblyLocation.DirectoryName ?? "";
 		if (String.IsNullOrEmpty(_pluginDir))
 		{
 			throw new Exception("Could not determine plugin directory");
 		}
 
-		_pluginConfigDir = PluginInterface.GetPluginConfigDirectory();
+		_pluginConfigDir = pluginInterface.GetPluginConfigDirectory();
 
 		_runtimeDir = string.Format(@"{0}..\..\runtime", PluginInterface.ConfigFile.DirectoryName);
+		_actHandler = new ActHandler();
 
-		_actHandler = new ActHandler(PluginInterface);
-		
 		_dependencyManager = new DependencyManager(_pluginDir, _pluginConfigDir);
 		_dependencyManager.DependenciesReady += (_, _) => DependenciesReady();
 		_dependencyManager.Initialise();
 
 		// Hook up render hook
-		PluginInterface.UiBuilder.Draw += Render;
+		pluginInterface.UiBuilder.Draw += Render;
 	}
-
-	[PluginService]
-	// ReSharper disable once AutoPropertyCanBeMadeGetOnly.Local
-	private static DalamudPluginInterface PluginInterface { get; set; } = null!;
-
-	[PluginService]
-	// ReSharper disable once AutoPropertyCanBeMadeGetOnly.Local
-	private static ICommandManager CommandManager { get; set; } = null!;
-
-	[PluginService]
-	// ReSharper disable once AutoPropertyCanBeMadeGetOnly.Local
-	private static IChatGui Chat { get; set; } = null!;
 
 	// Required for LivePluginLoader support
 	public string AssemblyLocation { get; } = Assembly.GetExecutingAssembly().Location;
@@ -66,15 +57,15 @@ public class Plugin : IDalamudPlugin
 
 	public void Dispose()
 	{
-		foreach (Inlay inlay in _inlays.Values) { inlay.Dispose(); }
+		foreach (Overlay overlay in _overlays.Values) { overlay.Dispose(); }
 
-		_inlays.Clear();
+		_overlays.Clear();
 
 		_renderProcess?.Dispose();
 
 		_settings?.Dispose();
 
-		CommandManager.RemoveHandler(_command);
+		Services.CommandManager.RemoveHandler(_command);
 
 		WndProcHandler.Shutdown();
 		DxHandler.Shutdown();
@@ -85,42 +76,81 @@ public class Plugin : IDalamudPlugin
 	private void DependenciesReady()
 	{
 		// Spin up DX handling from the plugin interface
-		DxHandler.Initialise(PluginInterface);
+		DxHandler.Initialise(Services.PluginInterface);
 
 		// Spin up WndProc hook
 		WndProcHandler.Initialise(DxHandler.WindowHandle);
 		WndProcHandler.WndProcMessage += OnWndProc;
 
 		// Boot the render process. This has to be done before initialising settings to prevent a
-		// race condition inlays receiving a null reference.
+		// race condition overlays receiving a null reference.
 		int pid = Process.GetCurrentProcess().Id;
-		_renderProcess = new RenderProcess(pid, _pluginDir, _pluginConfigDir, _runtimeDir, _dependencyManager);
-		_renderProcess.Receive += HandleIpcRequest;
+		_renderProcess = new RenderProcess(pid, _pluginDir, _pluginConfigDir, _runtimeDir, _dependencyManager, Services.PluginLog);
+		_renderProcess.Rpc.RendererReady += msg =>
+		{
+			if (!msg.HasDxSharedTexturesSupport)
+			{
+				Services.PluginLog.Error("Could not initialize shared textures transport. Browsingway will not work.");
+				return;
+			}
+
+			Services.Framework.RunOnFrameworkThread(() =>
+			{
+				if (_settings is not null)
+				{
+					_settings.HydrateOverlays();
+				}
+			});
+		};
+		_renderProcess.Rpc.SetCursor += msg =>
+		{
+			Services.Framework.RunOnFrameworkThread(() =>
+			{
+				Guid guid = new(msg.Guid.Span);
+				Overlay? overlay = _overlays.Values.FirstOrDefault(overlay => overlay.RenderGuid == guid);
+				overlay?.SetCursor(msg.Cursor);
+			});
+		};
+		_renderProcess.Rpc.UpdateTexture += msg =>
+		{
+			Services.Framework.RunOnFrameworkThread(() =>
+			{
+				Guid guid = new(msg.Guid.Span);
+				if (_overlays.TryGetValue(guid, out Overlay? overlay))
+				{
+					overlay.SetTexture((IntPtr)msg.TextureHandle);
+				}
+				else
+				{
+					Services.PluginLog.Error("Overlay Id not found");
+				}
+			});
+		};
 		_renderProcess.Start();
 
 		// Prep settings
-		_settings = PluginInterface.Create<Settings>();
+		_settings = new Settings();
 		if (_settings is not null)
 		{
-			_settings.InlayAdded += OnInlayAdded;
-			_settings.InlayNavigated += OnInlayNavigated;
-			_settings.InlayDebugged += OnInlayDebugged;
-			_settings.InlayRemoved += OnInlayRemoved;
-			_settings.InlayZoomed += OnInlayZoomed;
-			_settings.InlayMuted += OnInlayMuted;
-			_settings.TransportChanged += OnTransportChanged;
+			_settings.OverlayAdded += OnOverlayAdded;
+			_settings.OverlayNavigated += OnOverlayNavigated;
+			_settings.OverlayDebugged += OnOverlayDebugged;
+			_settings.OverlayRemoved += OnOverlayRemoved;
+			_settings.OverlayZoomed += OnOverlayZoomed;
+			_settings.OverlayMuted += OnOverlayMuted;
 			_actHandler.AvailabilityChanged += OnActAvailabilityChanged;
+			_settings.OverlayUserCssChanged += OnUserCssChanged;
 		}
 
 		// Hook up the main BW command
-		CommandManager.AddHandler(_command, new CommandInfo(HandleCommand) { HelpMessage = "从聊天栏控制 Browsingway! 输入 '/bw config' 或打开设置菜单获取更多信息.", ShowInHelp = true });
+		Services.CommandManager.AddHandler(_command, new CommandInfo(HandleCommand) { HelpMessage = "从聊天栏控制 Browsingway! 输入 '/bw config' 或打开设置菜单获取更多信息.", ShowInHelp = true });
 	}
 
 	private (bool, long) OnWndProc(WindowsMessage msg, ulong wParam, long lParam)
 	{
-		// Notify all the inlays of the wndproc, respond with the first capturing response (if any)
+		// Notify all the overlays of the wndproc, respond with the first capturing response (if any)
 		// TODO: Yeah this ain't great but realistically only one will capture at any one time for now.
-		IEnumerable<(bool, long)> responses = _inlays.Select(pair => pair.Value.WndProcMessage(msg, wParam, lParam));
+		IEnumerable<(bool, long)> responses = _overlays.Select(pair => pair.Value.WndProcMessage(msg, wParam, lParam));
 		return responses.FirstOrDefault(pair => pair.Item1);
 	}
 
@@ -129,86 +159,53 @@ public class Plugin : IDalamudPlugin
 		_settings?.OnActAvailabilityChanged(e);
 	}
 
-	private void OnInlayAdded(object? sender, InlayConfiguration inlayConfig)
+	private void OnOverlayAdded(object? sender, InlayConfiguration overlayConfig)
 	{
 		if (_renderProcess is null || _settings is null)
 		{
 			return;
 		}
 
-		Inlay inlay = new(_renderProcess, _settings.Config, inlayConfig);
-		_inlays.Add(inlayConfig.Guid, inlay);
+		Overlay overlay = new(_renderProcess, overlayConfig);
+		_overlays.TryAdd(overlayConfig.Guid, overlay);
 	}
 
-	private void OnInlayNavigated(object? sender, InlayConfiguration config)
+	private void OnOverlayNavigated(object? sender, InlayConfiguration config)
 	{
-		if (_inlays.TryGetValue(config.Guid, out var inlay))
-			inlay.Navigate(config.Url);
+		if (_overlays.TryGetValue(config.Guid, out var overlay))
+			overlay.Navigate(config.Url);
 	}
 
-	private void OnInlayDebugged(object? sender, InlayConfiguration config)
+	private void OnOverlayDebugged(object? sender, InlayConfiguration config)
 	{
-		if (_inlays.TryGetValue(config.Guid, out var inlay))
-			inlay.Debug();
+		if (_overlays.TryGetValue(config.Guid, out var overlay))
+			overlay.Debug();
 	}
 
-	private void OnInlayRemoved(object? sender, InlayConfiguration config)
+	private void OnOverlayRemoved(object? sender, InlayConfiguration config)
 	{
-		if (_inlays.TryGetValue(config.Guid, out var inlay))
+		if (_overlays.Remove(config.Guid, out var overlay))
 		{
-			_inlays.Remove(config.Guid);
-			inlay.Dispose();
+			overlay.Dispose();
 		}
 	}
 
-	private void OnInlayZoomed(object? sender, InlayConfiguration config)
+	private void OnOverlayZoomed(object? sender, InlayConfiguration config)
 	{
-		if (_inlays.TryGetValue(config.Guid, out var inlay))
-			inlay.Zoom(config.Zoom);
+		if (_overlays.TryGetValue(config.Guid, out var overlay))
+			overlay.Zoom(config.Zoom);
 	}
 
-	private void OnInlayMuted(object? sender, InlayConfiguration config)
+	private void OnOverlayMuted(object? sender, InlayConfiguration config)
 	{
-		if (_inlays.TryGetValue(config.Guid, out var inlay))
-			inlay.Mute(config.Muted);
+		if (_overlays.TryGetValue(config.Guid, out var overlay))
+			overlay.Mute(config.Muted);
 	}
 
-	private void OnTransportChanged(object? sender, EventArgs unused)
+	private void OnUserCssChanged(object? sender, InlayConfiguration config)
 	{
-		// Transport has changed, need to rebuild all the inlay renderers
-		foreach (Inlay inlay in _inlays.Values)
-		{
-			inlay.InvalidateTransport();
-		}
-	}
-
-	private object? HandleIpcRequest(object? sender, UpstreamIpcRequest request)
-	{
-		switch (request)
-		{
-			case ReadyNotificationRequest readyNotificationRequest:
-				{
-					if (_settings is not null)
-					{
-						_settings.SetAvailableTransports(readyNotificationRequest.AvailableTransports);
-						_settings.HydrateInlays();
-					}
-
-					return null;
-				}
-
-			case SetCursorRequest setCursorRequest:
-				{
-					// TODO: Integrate ideas from Bridge re: SoC between widget and inlay
-					Inlay? inlay = _inlays.Values.FirstOrDefault(inlay => inlay.RenderGuid == setCursorRequest.Guid);
-
-					inlay?.SetCursor(setCursorRequest.Cursor);
-					return null;
-				}
-
-			default:
-				throw new Exception($"Unknown IPC request type {request.GetType().Name} received.");
-		}
+		Overlay overlay = _overlays[config.Guid];
+		overlay.InjectUserCss(config.CustomCss);
 	}
 
 	private void Render()
@@ -221,7 +218,7 @@ public class Plugin : IDalamudPlugin
 		_renderProcess?.EnsureRenderProcessIsAlive();
 		_actHandler.Check();
 
-		foreach (Inlay inlay in _inlays.Values) { inlay.Render(); }
+		foreach (Overlay overlay in _overlays.Values) { overlay.Render(); }
 
 		ImGui.PopStyleVar();
 	}
@@ -234,8 +231,8 @@ public class Plugin : IDalamudPlugin
 
 		if (args.Length == 0)
 		{
-			Chat.PrintError(
-				"未指定子指令. 有效的子指令为: config,refresh,inlay.");
+			Services.Chat.PrintError(
+				"未指定子指令. 有效的子指令为: config,refresh,overlay.");
 			return;
 		}
 
@@ -247,14 +244,17 @@ public class Plugin : IDalamudPlugin
 				_settings?.HandleConfigCommand(subcommandArgs);
 				break;
 			case "inlay":
-				_settings?.HandleInlayCommand(subcommandArgs);
+				_settings?.HandleOverlayCommand(subcommandArgs);
+				break;
+			case "overlay":
+				_settings?.HandleOverlayCommand(subcommandArgs);
 				break;
 			case "refresh":
 				_settings?.HandleRefreshAllCommand();
 				break;
 			default:
-				Chat.PrintError(
-					$"未知子指令 '{args[0]}'. 有效的子指令为: config,refresh,inlay.");
+				Services.Chat.PrintError(
+					$"未知子指令 '{args[0]}'. 有效的子指令为: config,overlay,refresh,inlay.");
 				break;
 		}
 	}

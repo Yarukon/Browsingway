@@ -1,4 +1,4 @@
-﻿using Dalamud.Logging;
+using Dalamud.Interface.Internal;
 using ImGuiNET;
 using System.Collections.Concurrent;
 using System.IO.Compression;
@@ -27,27 +27,33 @@ internal class Dependency
 	}
 }
 
-internal class DependencyManager : IDisposable
+public class DependencyManager : IDisposable
 {
 	private const string _downloadDir = "downloads";
+
+	private const uint _colorProgress = 0xAAD76B39;
+	private const uint _colorError = 0xAA0000FF;
+	private const uint _colorDone = 0xAA355506;
 
 	// Per-dependency special-cased progress values
 	private const short _depExtracting = -1;
 	private const short _depComplete = -2;
 	private const short _depFailed = -3;
 
-	private static readonly Dependency[] _dependencies = { new("https://oss.yarukon.me/browsingway/cefsharp-{VERSION}.zip", "cef", "108.4.13+ga98cd4c+chromium-108.0.5359.125", "3E05180420D1681A5F0F001E1D23928E0E19B73A521361491479D12452A55AC3") };
+	private static readonly Dependency[] _dependencies = { new("https://oss.yarukon.me/browsingway/cefsharp-{VERSION}.zip", "cef", "122.1.12+g6e69d20+chromium-122.0.6261.112", "B2CE156C97CEF12EB6B7235B962CEE9EEBD71E91BC9343C4EC94073137734221") };
 	private readonly string _debugCheckDir;
 
 	private readonly string _dependencyDir;
 	private readonly ConcurrentDictionary<string, float> _installProgress = new();
 	private Dependency[]? _missingDependencies;
 	private ViewMode _viewMode = ViewMode.Hidden;
+	private IDalamudTextureWrap? _texIcon;
 
 	public DependencyManager(string pluginDir, string pluginConfigDir)
 	{
 		_dependencyDir = Path.Join(pluginConfigDir, "dependencies");
 		_debugCheckDir = Path.GetDirectoryName(pluginDir) ?? pluginDir;
+		_texIcon = Services.TextureProvider.GetTextureFromFile(new(Path.Combine(pluginDir, "icon.png")));
 	}
 
 	public void Dispose() { }
@@ -92,14 +98,14 @@ internal class DependencyManager : IDisposable
 		}
 
 		_viewMode = ViewMode.Installing;
-		PluginLog.Log("Installing dependencies...");
+		Services.PluginLog.Info("Installing dependencies...");
 
 		IEnumerable<Task> installTasks = _missingDependencies.Select(InstallDependency);
 		Task.WhenAll(installTasks).ContinueWith(task =>
 		{
 			bool failed = _installProgress.Any(pair => pair.Value == _depFailed);
 			_viewMode = failed ? ViewMode.Failed : ViewMode.Complete;
-			PluginLog.Log($"Dependency install {_viewMode}.");
+			Services.PluginLog.Info($"Dependency install {_viewMode}.");
 
 			try { Directory.Delete(Path.Combine(_dependencyDir, _downloadDir), true); }
 			catch { }
@@ -108,7 +114,7 @@ internal class DependencyManager : IDisposable
 
 	private async Task InstallDependency(Dependency dependency)
 	{
-		PluginLog.Log($"Downloading {dependency.Directory} {dependency.Version}");
+		Services.PluginLog.Info($"Downloading {dependency.Directory} {dependency.Version}");
 
 		// Ensure the downloads dir exists
 		string downloadDir = Path.Combine(_dependencyDir, _downloadDir);
@@ -150,14 +156,14 @@ internal class DependencyManager : IDisposable
 		}
 		catch
 		{
-			PluginLog.LogError($"Failed to calculate checksum for {filePath}");
+			Services.PluginLog.Error($"Failed to calculate checksum for {filePath}");
 			downloadedChecksum = "FAILED";
 		}
 
 		// Make sure the checksum matches
 		if (downloadedChecksum != dependency.Checksum)
 		{
-			PluginLog.LogError($"Mismatched checksum for {filePath}: Got {downloadedChecksum} but expected {dependency.Checksum}");
+			Services.PluginLog.Error($"Mismatched checksum for {filePath}: Got {downloadedChecksum} but expected {dependency.Checksum}");
 			_installProgress.AddOrUpdate(dependency.Directory, _depFailed, (key, oldValue) => _depFailed);
 			File.Delete(filePath);
 			return;
@@ -196,8 +202,22 @@ internal class DependencyManager : IDisposable
 	{
 		if (_viewMode == ViewMode.Hidden) { return; }
 
-		ImGuiWindowFlags windowFlags = ImGuiWindowFlags.AlwaysAutoResize;
+		ImGui.SetNextWindowSize(new Vector2(1300, 350), ImGuiCond.Always);
+		ImGuiWindowFlags windowFlags = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoResize;
 		ImGui.Begin("Browsingway 依赖", windowFlags);
+		if (_texIcon is not null)
+			ImGui.Image(_texIcon.ImGuiHandle, new Vector2(256, 256));
+		ImGui.SameLine();
+
+		string version = _missingDependencies?.First()?.Version ?? "???";
+		string checksum = _missingDependencies?.First()?.Checksum ?? "???";
+		ImGui.Text("Browsingway requires additional dependencies to function.\n" +
+		           "These are not shipped with the plugin due to their size.\n\n" +
+		           "The files are hosted on GitHub and are verified with SHA256 checksums:\n" +
+		           "https://github.com/Styr1x/Browsingway/releases/tag/cef-binaries\n\n" +
+		           "CefSharp: " + version + "\n" +
+		           "SHA256: " + checksum
+		);
 		//ImGui.SetWindowFocus();
 
 		switch (_viewMode)
@@ -221,78 +241,67 @@ internal class DependencyManager : IDisposable
 
 	private void RenderConfirm()
 	{
-		ImGui.Text("下列依赖未找到:");
-
 		if (_missingDependencies == null) { return; }
 
-		ImGui.Indent();
-		foreach (Dependency dependency in _missingDependencies)
-		{
-			ImGui.Text($"{dependency.Directory} ({dependency.Version})");
-		}
-
-		ImGui.Unindent();
-
 		ImGui.Separator();
-
-		if (ImGui.Button("安装丢失的依赖")) { InstallDependencies(); }
+		if (ImGui.Button("Install missing dependencies")) { InstallDependencies(); }
 	}
 
 	private void RenderInstalling()
 	{
-		ImGui.Text("正在安装依赖...");
-
-		ImGui.Separator();
-
+		ImGui.Text("正在安装依赖: ");
+		ImGui.SameLine();
 		RenderDownloadProgress();
 	}
 
 	private void RenderComplete()
 	{
-		ImGui.Text("依赖安装完毕!");
-
-		ImGui.Separator();
-
+		ImGui.Text("Installing dependencies: ");
+		ImGui.SameLine();
 		RenderDownloadProgress();
-
-		ImGui.Separator();
-
-		if (ImGui.Button("确定", new Vector2(100, 0))) { CheckDependencies(); }
+		ImGui.SameLine();
+		if (ImGui.Button("Close", new Vector2(100, 0))) { CheckDependencies(); }
 	}
 
 	private void RenderFailed()
 	{
-		ImGui.Text("有1个或多个依赖安装失败.");
-		ImGui.Text("这通常是因为网络问题导致的. 请重试.");
-		ImGui.Text("如果该问题持续发生, 那就继续重试吧.");
-
-		ImGui.Separator();
-
+		ImGui.Text("Installing dependencies: ");
+		ImGui.SameLine();
 		RenderDownloadProgress();
-
-		ImGui.Separator();
-
+		ImGui.SameLine();
 		if (ImGui.Button("重试", new Vector2(100, 0))) { CheckDependencies(); }
 	}
 
 	private void RenderDownloadProgress()
 	{
-		Vector2 progressSize = new(200, 0);
+		Vector2 progressSize = new(875, 0);
 
 		foreach (KeyValuePair<string, float> progress in _installProgress)
 		{
-			if (progress.Value == _depExtracting) { ImGui.ProgressBar(1, progressSize, "解压"); }
-			else if (progress.Value == _depComplete) { ImGui.ProgressBar(1, progressSize, "完毕"); }
-			else if (progress.Value == _depFailed)
+			if (progress.Value == _depExtracting)
 			{
-				ImGui.PushStyleColor(ImGuiCol.PlotHistogram, 0xAA0000FF);
-				ImGui.ProgressBar(1, progressSize, "错误");
+				ImGui.PushStyleColor(ImGuiCol.PlotHistogram, _colorProgress);
+				ImGui.ProgressBar(1, progressSize, "Extracting");
 				ImGui.PopStyleColor();
 			}
-			else { ImGui.ProgressBar(progress.Value / 100, progressSize); }
-
-			ImGui.SameLine();
-			ImGui.Text(progress.Key);
+			else if (progress.Value == _depComplete)
+			{
+				ImGui.PushStyleColor(ImGuiCol.PlotHistogram, _colorDone);
+				ImGui.ProgressBar(1, progressSize, "Complete");
+				ImGui.PopStyleColor();
+			}
+			else if (progress.Value == _depFailed)
+			{
+				ImGui.PushStyleColor(ImGuiCol.PlotHistogram, _colorError);
+				ImGui.ProgressBar(1, progressSize, "Error");
+				ImGui.PopStyleColor();
+			}
+			else
+			{
+				ImGui.PushStyleColor(ImGuiCol.PlotHistogram, _colorProgress);
+				ImGui.ProgressBar(progress.Value / 100, progressSize);
+				ImGui.PopStyleColor();
+			}
 		}
 	}
 

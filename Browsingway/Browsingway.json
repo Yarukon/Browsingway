@@ -15,5 +15,5 @@
         "website",
         "video"
     ],
-    "Changelog": "- Add IINACT support.\n- Fix ACT not detected when running as tray icon.\n- Fix overlays using global context."
+    "Changelog": "- Chromium 122.0.6261.112\n- Option to hide overlays out of combat (by electr0sheep)\n- .net 8 support\n- IPC refactoring"
 }

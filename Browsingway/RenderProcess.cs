@@ -1,17 +1,18 @@
-﻿using Browsingway.Common;
-using Dalamud.Logging;
+using Browsingway.Common;
+using Browsingway.Common.Ipc;
+using Dalamud.Plugin.Services;
 using System.Diagnostics;
 
 namespace Browsingway;
 
 internal class RenderProcess : IDisposable
 {
-	public delegate object? ReceiveEventHandler(object sender, UpstreamIpcRequest request);
+	public event EventHandler? Crashed;
+	public BrowsingwayRpc Rpc { get; }
 
 	private readonly string _configDir;
 	private readonly DependencyManager _dependencyManager;
 
-	private readonly IpcBuffer<UpstreamIpcRequest, DownstreamIpcRequest> _ipc;
 	private readonly string _ipcChannelName;
 
 	private readonly string _keepAliveHandleName;
@@ -27,7 +28,8 @@ internal class RenderProcess : IDisposable
 		string pluginDir,
 		string configDir,
 		string runtimeDir,
-		DependencyManager dependencyManager
+		DependencyManager dependencyManager,
+		IPluginLog pluginLog
 	)
 	{
 		_keepAliveHandleName = $"BrowsingwayRendererKeepAlive{pid}";
@@ -38,7 +40,7 @@ internal class RenderProcess : IDisposable
 		_runtimeDir = runtimeDir;
 		_parentPid = pid;
 
-		_ipc = new IpcBuffer<UpstreamIpcRequest, DownstreamIpcRequest>(_ipcChannelName, request => Receive?.Invoke(this, request));
+		Rpc = new BrowsingwayRpc(_ipcChannelName);
 
 		_process = SetupProcess();
 	}
@@ -48,12 +50,8 @@ internal class RenderProcess : IDisposable
 		Stop();
 
 		_process.Dispose();
-		_ipc.Dispose();
+		Rpc.Dispose();
 	}
-
-	public event EventHandler? Crashed;
-
-	public event ReceiveEventHandler? Receive;
 
 	public void Start()
 	{
@@ -70,6 +68,7 @@ internal class RenderProcess : IDisposable
 	}
 
 	private int _restarting = 0; // This needs to be a numeric type for Interlocked.Exchange
+
 	public void EnsureRenderProcessIsAlive()
 	{
 		if (!_running || !HasProcessExited())
@@ -84,7 +83,7 @@ internal class RenderProcess : IDisposable
 				try
 				{
 					// process crashed, restart
-					PluginLog.LogError("Render process crashed - will restart asap");
+					Services.PluginLog.Error("Render process crashed - will restart asap");
 					_process = SetupProcess();
 					_process.Start();
 					_process.BeginOutputReadLine();
@@ -98,7 +97,7 @@ internal class RenderProcess : IDisposable
 				}
 				catch (Exception e)
 				{
-					PluginLog.LogError(e, "Failed to restart render process");
+					Services.PluginLog.Error(e, "Failed to restart render process");
 				}
 				finally
 				{
@@ -106,14 +105,6 @@ internal class RenderProcess : IDisposable
 				}
 			}
 		});
-	}
-
-	public void Send(DownstreamIpcRequest request) { Send<object>(request); }
-
-	// TODO: Option to wrap this func in an async version?
-	public Task<IpcResponse<TResponse>> Send<TResponse>(DownstreamIpcRequest request)
-	{
-		return _ipc.RemoteRequestAsync<TResponse>(request);
 	}
 
 	public void Stop()
@@ -135,6 +126,7 @@ internal class RenderProcess : IDisposable
 
 	private bool _hasExited = false;
 	private int _checkingExited = 0; // This needs to be a numeric type for Interlocked.Exchange
+
 	private bool HasProcessExited()
 	{
 		// Process.HasExited can be an expensive call (on some systems?), so it's
@@ -151,7 +143,7 @@ internal class RenderProcess : IDisposable
 				}
 				catch (Exception e)
 				{
-					PluginLog.LogError(e, "Failed to get process exit status");
+					Services.PluginLog.Error(e, "Failed to get process exit status");
 				}
 				finally
 				{
@@ -167,10 +159,10 @@ internal class RenderProcess : IDisposable
 	{
 		string cefAssemblyDir = _dependencyManager.GetDependencyPathFor("cef");
 
-		RenderProcessArguments processArgs = new()
+		RenderParams processArgs = new()
 		{
 			ParentPid = _parentPid,
-			DalamudAssemblyDir = Path.GetDirectoryName(typeof(PluginLog).Assembly.Location)!,
+			DalamudAssemblyDir = Path.GetDirectoryName(typeof(IPluginLog).Assembly.Location)!,
 			CefAssemblyDir = cefAssemblyDir,
 			CefCacheDir = Path.Combine(_configDir, "cef-cache"),
 			DxgiAdapterLuid = DxHandler.AdapterLuid,
@@ -182,7 +174,7 @@ internal class RenderProcess : IDisposable
 		process.StartInfo = new ProcessStartInfo
 		{
 			FileName = Path.Combine(_pluginDir, "renderer", "Browsingway.Renderer.exe"),
-			Arguments = processArgs.Serialise().Replace("\"", "\"\"\""),
+			Arguments = RenderParamsSerializer.Serialize(processArgs),
 			UseShellExecute = false,
 			CreateNoWindow = true,
 			RedirectStandardOutput = true,
@@ -195,8 +187,8 @@ internal class RenderProcess : IDisposable
 		process.StartInfo.EnvironmentVariables.Remove("DOTNET_ROOT");
 		process.StartInfo.EnvironmentVariables.Add("DOTNET_ROOT", runtimePath);
 
-		process.OutputDataReceived += (_, args) => PluginLog.Log($"[Render]: {args.Data}");
-		process.ErrorDataReceived += (_, args) => PluginLog.LogError($"[Render]: {args.Data}");
+		process.OutputDataReceived += (_, args) => Services.PluginLog.Info($"[Render]: {args.Data}");
+		process.ErrorDataReceived += (_, args) => Services.PluginLog.Error($"[Render]: {args.Data}");
 
 		return process;
 	}
