@@ -487,7 +487,7 @@ internal class Settings : IDisposable
 			dirty = true;
 		}
 
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("启用针对 ACT/IINACT 的特殊优化. 如果 ACT/IINACT 未在运行的话将不会渲染该嵌入式窗口.\n\nNOTE: This does NOT disable the overlay if the websocket is not reporting data."); }
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("启用针对 ACT/IINACT 的特殊优化. 如果 ACT/IINACT 未在运行的话将不会渲染该嵌入式窗口.\n\n注意: 即使websocket没有传输数据也不会禁用该嵌入式窗口的渲染."); }
 
 		ImGui.NextColumn();
 

@@ -1,4 +1,6 @@
 using Dalamud.Interface.Internal;
+using Dalamud.Interface.Textures;
+using Dalamud.Interface.Textures.TextureWraps;
 using ImGuiNET;
 using System.Collections.Concurrent;
 using System.IO.Compression;
@@ -47,13 +49,13 @@ public class DependencyManager : IDisposable
 	private readonly ConcurrentDictionary<string, float> _installProgress = new();
 	private Dependency[]? _missingDependencies;
 	private ViewMode _viewMode = ViewMode.Hidden;
-	private IDalamudTextureWrap? _texIcon;
+	private ISharedImmediateTexture? _texIcon;
 
 	public DependencyManager(string pluginDir, string pluginConfigDir)
 	{
 		_dependencyDir = Path.Join(pluginConfigDir, "dependencies");
 		_debugCheckDir = Path.GetDirectoryName(pluginDir) ?? pluginDir;
-		_texIcon = Services.TextureProvider.GetTextureFromFile(new(Path.Combine(pluginDir, "icon.png")));
+		_texIcon = Services.TextureProvider.GetFromFile(new FileInfo(Path.Combine(pluginDir, "icon.png")));
 	}
 
 	public void Dispose() { }
@@ -206,7 +208,7 @@ public class DependencyManager : IDisposable
 		ImGuiWindowFlags windowFlags = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoResize;
 		ImGui.Begin("Browsingway 依赖", windowFlags);
 		if (_texIcon is not null)
-			ImGui.Image(_texIcon.ImGuiHandle, new Vector2(256, 256));
+			ImGui.Image(_texIcon.GetWrapOrEmpty().ImGuiHandle, new Vector2(256, 256));
 		ImGui.SameLine();
 
 		string version = _missingDependencies?.First()?.Version ?? "???";

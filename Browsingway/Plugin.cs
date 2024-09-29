@@ -27,7 +27,7 @@ public class Plugin : IDalamudPlugin
 
 	private readonly string _runtimeDir;
 
-	public Plugin(DalamudPluginInterface pluginInterface)
+	public Plugin(IDalamudPluginInterface pluginInterface)
 	{
 		// init services
 		_services = pluginInterface.Create<Services>()!;
