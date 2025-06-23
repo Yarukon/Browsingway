@@ -46,7 +46,7 @@ internal class Overlay : IDisposable
 
 	public void Initialise()
 	{
-		var requestContextSettings = new RequestContextSettings { CachePath = Path.Combine(Cef.GetGlobalRequestContext().CachePath, _id), PersistSessionCookies = true };
+		var requestContextSettings = new RequestContextSettings { CachePath = Path.Combine(CefHandler.RootCachePath, _id), PersistSessionCookies = true };
 		var rc = new RequestContext(requestContextSettings);
 
 		_browser = new ChromiumWebBrowser(_url, automaticallyCreateBrowser: false, requestContext: rc);
