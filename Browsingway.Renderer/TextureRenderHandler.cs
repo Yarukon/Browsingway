@@ -372,4 +372,10 @@ internal class TextureRenderHandler : IRenderHandler
 		Console.WriteLine($"Switching to unmapped cursor type {cursor}.");
 		return Cursor.Default;
 	}
+
+	public void OnAcceleratedPaint(PaintElementType type, Rect dirtyRect, AcceleratedPaintInfo acceleratedPaintInfo)
+	{
+		// TODO: use this instead of manual texture copying
+		throw new NotImplementedException();
+	}
 }

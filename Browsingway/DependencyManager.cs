@@ -42,7 +42,7 @@ public class DependencyManager : IDisposable
 	private const short _depComplete = -2;
 	private const short _depFailed = -3;
 
-	private static readonly Dependency[] _dependencies = { new("https://oss.yarukon.me/browsingway/cefsharp-{VERSION}.zip", "cef", "122.1.12+g6e69d20+chromium-122.0.6261.112", "B2CE156C97CEF12EB6B7235B962CEE9EEBD71E91BC9343C4EC94073137734221") };
+	private static readonly Dependency[] _dependencies = { new("https://oss.yarukon.me/browsingway/cefsharp-{VERSION}.zip", "cef", "134.3.9+g5dc6f2f+chromium-134.0.6998.178", "F761372E54962FBF1F8906EE864F8B92D3A3A5B4F5EA5C34EA12340907E0B41A") };
 	private readonly string _debugCheckDir;
 
 	private readonly string _dependencyDir;
@@ -69,7 +69,7 @@ public class DependencyManager : IDisposable
 
 	private void CheckDependencies()
 	{
-		_missingDependencies = _dependencies.Where(DependencyMissing).ToArray();
+		_missingDependencies = [.. _dependencies.Where(DependencyMissing)];
 		if (_missingDependencies.Length == 0)
 		{
 			_viewMode = ViewMode.Hidden;
