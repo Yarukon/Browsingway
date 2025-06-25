@@ -3,7 +3,6 @@ using CefSharp;
 using CefSharp.OffScreen;
 using CefSharp.Structs;
 using BrowserSettings = CefSharp.BrowserSettings;
-using Cef = CefSharp.Cef;
 using RequestContext = CefSharp.RequestContext;
 using RequestContextSettings = CefSharp.RequestContextSettings;
 using Size = System.Drawing.Size;
