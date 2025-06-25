@@ -16,5 +16,5 @@
         "website",
         "video"
     ],
-    "Changelog": "- Chromium 122.0.6261.112\n- Option to hide overlays out of combat (by electr0sheep)\n- .net 8 support\n- IPC refactoring"
+    "Changelog": "- Bump Chromium to 134.0.6998.178\n- (this fixes CVE-2025-2783)\n"
 }

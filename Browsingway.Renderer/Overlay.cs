@@ -21,7 +21,8 @@ internal class Overlay : IDisposable
 	private bool _muted;
 	private string _customCss;
 
-	public Overlay(string id, string url, float zoom, bool muted, int framerate, string customCss, TextureRenderHandler renderHandler)
+	public Overlay(string id, string url, float zoom, bool muted, int framerate, string customCss,
+		TextureRenderHandler renderHandler)
 	{
 		_id = id;
 		_url = url;
@@ -45,7 +46,11 @@ internal class Overlay : IDisposable
 
 	public void Initialise()
 	{
-		var requestContextSettings = new RequestContextSettings { CachePath = Path.Combine(CefHandler.RootCachePath, _id), PersistSessionCookies = true };
+		var requestContextSettings = new RequestContextSettings
+		{
+			CachePath = Path.Combine(CefHandler.RootCachePath, _id),
+			PersistSessionCookies = true
+		};
 		var rc = new RequestContext(requestContextSettings);
 
 		_browser = new ChromiumWebBrowser(_url, automaticallyCreateBrowser: false, requestContext: rc);
@@ -54,7 +59,7 @@ internal class Overlay : IDisposable
 		Rect size = RenderHandler.GetViewRect();
 
 		// General _browser config
-		WindowInfo windowInfo = new() { Width = size.Width, Height = size.Height };
+		WindowInfo windowInfo = new() {Width = size.Width, Height = size.Height};
 		windowInfo.SetAsWindowless(IntPtr.Zero);
 
 		// WindowInfo gets ignored sometimes, be super sure:
@@ -73,7 +78,7 @@ internal class Overlay : IDisposable
 			}
 		};
 
-		BrowserSettings browserSettings = new() { WindowlessFrameRate = _framerate };
+		BrowserSettings browserSettings = new() {WindowlessFrameRate = _framerate};
 
 		// Ready, boot up the _browser
 		_browser.CreateBrowser(windowInfo, browserSettings);

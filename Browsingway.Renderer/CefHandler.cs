@@ -7,7 +7,7 @@ namespace Browsingway.Renderer;
 internal static class CefHandler
 {
 	public static string RootCachePath { get; private set; } = null!;
-
+	
 	public static void Initialise(string cefAssemblyPath, string cefCacheDir, int parentPid)
 	{
 		CefSettings settings = new()

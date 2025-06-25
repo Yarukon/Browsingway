@@ -1,6 +1,5 @@
 using Dalamud.Interface.Internal;
 using Dalamud.Interface.Textures;
-using Dalamud.Interface.Textures.TextureWraps;
 using ImGuiNET;
 using System.Collections.Concurrent;
 using System.IO.Compression;
@@ -55,7 +54,7 @@ public class DependencyManager : IDisposable
 	{
 		_dependencyDir = Path.Join(pluginConfigDir, "dependencies");
 		_debugCheckDir = Path.GetDirectoryName(pluginDir) ?? pluginDir;
-		_texIcon = Services.TextureProvider.GetFromFile(new FileInfo(Path.Combine(pluginDir, "icon.png")));
+		_texIcon = Services.TextureProvider.GetFromFile(Path.Combine(pluginDir, "icon.png"));
 	}
 
 	public void Dispose() { }
@@ -165,7 +164,8 @@ public class DependencyManager : IDisposable
 		// Make sure the checksum matches
 		if (downloadedChecksum != dependency.Checksum)
 		{
-			Services.PluginLog.Error($"不匹配的校验和 {filePath}: 返回 {downloadedChecksum} 但预期为 {dependency.Checksum}");
+			Services.PluginLog.Error(
+				$"不匹配的校验和 {filePath}: 返回 {downloadedChecksum} 但预期为 {dependency.Checksum}");
 			_installProgress.AddOrUpdate(dependency.Directory, _depFailed, (key, oldValue) => _depFailed);
 			File.Delete(filePath);
 			return;
@@ -209,6 +209,7 @@ public class DependencyManager : IDisposable
 		ImGui.Begin("Browsingway 依赖", windowFlags);
 		if (_texIcon is not null)
 			ImGui.Image(_texIcon.GetWrapOrEmpty().ImGuiHandle, new Vector2(256, 256));
+
 		ImGui.SameLine();
 
 		string version = _missingDependencies?.First()?.Version ?? "???";
