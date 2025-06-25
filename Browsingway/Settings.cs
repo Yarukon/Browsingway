@@ -65,10 +65,10 @@ internal class Settings : IDisposable
 			{
 				ReloadOverlay(inlayConfig);
 			}
-			Services.Chat.Print("已向所有嵌入式窗口发送刷新操作!");
+			Services.Chat.Print("已向所有悬浮窗发送刷新操作!");
 		} else
 		{
-			Services.Chat.PrintError("你还没有创建嵌入式窗口!");
+			Services.Chat.PrintError("你还没有创建悬浮窗!");
 		}
 	}
 
@@ -79,7 +79,7 @@ internal class Settings : IDisposable
 		// Ensure there's enough arguments
 		if (args.Length < 2 || (args[1] != "reload" && args.Length < 3))
 		{
-			Services.Chat.PrintError("无效嵌入式窗口指令. 支持的参数: '[overlayCommandName] [setting] [value]'");
+			Services.Chat.PrintError("无效悬浮窗指令. 支持的参数: '[overlayCommandName] [setting] [value]'");
 			return;
 		}
 
@@ -88,7 +88,7 @@ internal class Settings : IDisposable
 		if (targetConfig == null)
 		{
 			Services.Chat.PrintError(
-				$"未知嵌入式窗口 '{args[0]}'.");
+				$"未知悬浮窗 '{args[0]}'.");
 			return;
 		}
 
@@ -175,7 +175,7 @@ internal class Settings : IDisposable
 
 	private InlayConfiguration? AddNewOverlay()
 	{
-		InlayConfiguration? overlayConfig = new() { Guid = Guid.NewGuid(), Name = "新嵌入式窗口", Url = "about:blank" };
+		InlayConfiguration? overlayConfig = new() { Guid = Guid.NewGuid(), Name = "新悬浮窗", Url = "about:blank" };
 		Config.Inlays.Add(overlayConfig);
 		OverlayAdded?.Invoke(this, overlayConfig);
 		SaveSettings();
@@ -289,7 +289,7 @@ internal class Settings : IDisposable
 		// Overlay selector list
 		ImGui.Dummy(new Vector2(0, 5));
 		ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
-		ImGui.Text("- 嵌入式窗口 -");
+		ImGui.Text("- 悬浮窗 -");
 		ImGui.PopStyleVar();
 		foreach (InlayConfiguration? overlayConfig in Config?.Inlays!)
 		{
@@ -338,7 +338,7 @@ internal class Settings : IDisposable
 	{
 		bool dirty = false;
 
-		ImGui.Text("在左侧选择一个嵌入式窗口来更改设置.");
+		ImGui.Text("在左侧选择一个悬浮窗来更改设置.");
 
 		if (ImGui.CollapsingHeader("指令帮助", ImGuiTreeNodeFlags.DefaultOpen))
 		{
@@ -346,11 +346,11 @@ internal class Settings : IDisposable
 			ImGui.Text("/bw config");
 			ImGui.Text("打开配置窗口.");
 			ImGui.Text("/bw refresh");
-			ImGui.Text("刷新所有的嵌入式窗口.");
+			ImGui.Text("刷新所有的悬浮窗.");
 			ImGui.Dummy(new Vector2(0, 5));
 			ImGui.Text("/bw overlay [overlayCommandName] [setting] [value]");
 			ImGui.TextWrapped(
-				"更改一个嵌入式窗口的设置.\n" +
+				"更改一个悬浮窗的设置.\n" +
 				"\tinlayCommandName: 要编辑的窗口. 使用 '指令名称' 来显示它的当前设定.\n" +
 				"\tsetting: 要更改的设定. 支持的设定有:\n" +
 				"\t\turl: string\n" +
@@ -451,7 +451,7 @@ internal class Settings : IDisposable
 			dirty = true;
 		}
 
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("禁用嵌入式窗口. 与仅隐藏相反, 该设定会防止此嵌入式窗口被创建."); }
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("禁用悬浮窗. 与仅隐藏相反, 该设定会防止此悬浮窗被创建."); }
 
 		ImGui.NextColumn();
 		ImGui.NextColumn();
@@ -487,7 +487,7 @@ internal class Settings : IDisposable
 			dirty = true;
 		}
 
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("启用针对 ACT/IINACT 的特殊优化. 如果 ACT/IINACT 未在运行的话将不会渲染该嵌入式窗口.\n\n注意: 即使websocket没有传输数据也不会禁用该嵌入式窗口的渲染."); }
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("启用针对 ACT/IINACT 的特殊优化. 如果 ACT/IINACT 未在运行的话将不会渲染该悬浮窗.\n\n注意: 即使websocket没有传输数据也不会禁用该悬浮窗的渲染."); }
 
 		ImGui.NextColumn();
 
@@ -522,7 +522,7 @@ internal class Settings : IDisposable
 		ImGui.NextColumn();
 
 		dirty |= ImGui.Checkbox("战斗外隐藏", ref overlayConfig.HideOutOfCombat);
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("处于战斗外状态时隐藏该嵌入式窗口."); }
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("处于战斗外状态时隐藏该悬浮窗."); }
 
 		ImGui.NextColumn();
 		ImGui.NextColumn();
@@ -530,7 +530,7 @@ internal class Settings : IDisposable
 		if (!overlayConfig.HideOutOfCombat) { ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f); }
 
 		dirty |= ImGui.InputInt("隐藏延迟", ref overlayConfig.HideDelay);
-		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("处于战斗外状态时延时隐藏该嵌入式窗口, 单位为秒."); }
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("处于战斗外状态时延时隐藏该悬浮窗, 单位为秒."); }
 
 		if (!overlayConfig.HideOutOfCombat) { ImGui.PopStyleVar(); }
 
@@ -542,7 +542,7 @@ internal class Settings : IDisposable
 			ImGui.NewLine();
 			dirty |= ImGui.Checkbox("全屏", ref overlayConfig.Fullscreen);
 			ImGui.NewLine();
-			if (ImGui.IsItemHovered()) { ImGui.SetTooltip("当启用时自动将该嵌入式窗口布满整个游戏窗口."); }
+			if (ImGui.IsItemHovered()) { ImGui.SetTooltip("当启用时自动将该悬浮窗布满整个游戏窗口."); }
 
 			ImGui.Text("自定义 CSS 样式代码:");
 			if (ImGui.InputTextMultiline("自定义 CSS 样式代码", ref overlayConfig.CustomCss, 1000000,
