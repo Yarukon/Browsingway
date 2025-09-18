@@ -1,6 +1,6 @@
 using Dalamud.Interface.Internal;
 using Dalamud.Interface.Textures;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Net;
@@ -208,7 +208,7 @@ public class DependencyManager : IDisposable
 		ImGuiWindowFlags windowFlags = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoResize;
 		ImGui.Begin("Browsingway 依赖", windowFlags);
 		if (_texIcon is not null)
-			ImGui.Image(_texIcon.GetWrapOrEmpty().ImGuiHandle, new Vector2(256, 256));
+			ImGui.Image(_texIcon.GetWrapOrEmpty().Handle, new Vector2(256, 256));
 
 		ImGui.SameLine();
 

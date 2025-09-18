@@ -4,7 +4,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using System.Diagnostics;
 using System.Numerics;
 using System.Reflection;
@@ -86,11 +86,11 @@ public class Plugin : IDalamudPlugin
 		// race condition overlays receiving a null reference.
 		int pid = Process.GetCurrentProcess().Id;
 		_renderProcess = new RenderProcess(pid, _pluginDir, _pluginConfigDir, _runtimeDir, _dependencyManager, Services.PluginLog);
-		_renderProcess.Rpc.RendererReady += msg =>
+		_renderProcess.Rpc!.RendererReady += msg =>
 		{
 			if (!msg.HasDxSharedTexturesSupport)
 			{
-				Services.PluginLog.Error("无法初始化共享材质传输. Browsingway 将会无法正常使用.");
+				Services.PluginLog.Error("无法初始化共享纹理传输. Browsingway 将无法正常工作.");
 				return;
 			}
 
@@ -166,7 +166,7 @@ public class Plugin : IDalamudPlugin
 			return;
 		}
 
-		Overlay overlay = new(_renderProcess, overlayConfig);
+		Overlay overlay = new(_renderProcess, overlayConfig, _pluginDir);
 		_overlays.TryAdd(overlayConfig.Guid, overlay);
 	}
 

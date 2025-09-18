@@ -1,5 +1,5 @@
 using Dalamud.Interface;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using System.Numerics;
 using System.Text.RegularExpressions;
 
@@ -523,6 +523,9 @@ internal class Settings : IDisposable
 
 		dirty |= ImGui.Checkbox("战斗外隐藏", ref overlayConfig.HideOutOfCombat);
 		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("处于战斗外状态时隐藏该悬浮窗."); }
+
+		dirty |= ImGui.Checkbox("PvP时隐藏", ref overlayConfig.HideInPvP);
+		if (ImGui.IsItemHovered()) { ImGui.SetTooltip("位于PvP区域时隐藏该悬浮窗."); }
 
 		ImGui.NextColumn();
 		ImGui.NextColumn();

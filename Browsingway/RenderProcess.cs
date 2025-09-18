@@ -8,7 +8,7 @@ namespace Browsingway;
 internal class RenderProcess : IDisposable
 {
 	public event EventHandler? Crashed;
-	public BrowsingwayRpc Rpc { get; }
+	public BrowsingwayRpc? Rpc { get; private set; }
 
 	private readonly string _configDir;
 	private readonly DependencyManager _dependencyManager;
@@ -18,6 +18,13 @@ internal class RenderProcess : IDisposable
 	private readonly string _keepAliveHandleName;
 	private readonly int _parentPid;
 	private readonly string _pluginDir;
+
+	private DateTime _lastRenderCheck = DateTime.MinValue;
+	private uint _restartCount = 0;
+
+	private const uint _maxRestarts = 5;
+	private const uint _checkDelaySeconds = 1;
+	private const uint _processOkAfterSeconds = 5;
 
 	private readonly string _runtimeDir;
 
@@ -50,7 +57,7 @@ internal class RenderProcess : IDisposable
 		Stop();
 
 		_process.Dispose();
-		Rpc.Dispose();
+		Rpc?.Dispose();
 	}
 
 	public void Start()
@@ -71,8 +78,37 @@ internal class RenderProcess : IDisposable
 
 	public void EnsureRenderProcessIsAlive()
 	{
-		if (!_running || !HasProcessExited())
+		if (!_running)
 		{
+			return;
+		}
+
+		// only check every second, reduces stress on the render thread
+		if (DateTime.Now - _lastRenderCheck < TimeSpan.FromSeconds(_checkDelaySeconds))
+		{
+			return;
+		}
+
+		_lastRenderCheck = DateTime.Now;
+
+		if (!HasProcessExited())
+		{
+			// process is still running, reset restart counter if it ran for at least 5 seconds
+			if (_restartCount > 0 && DateTime.Now - _process.StartTime > TimeSpan.FromSeconds(_processOkAfterSeconds))
+			{
+				_restartCount = 0;
+			}
+
+			return;
+		}
+
+		if (_restartCount >= _maxRestarts)
+		{
+			Services.PluginLog.Error("渲染进程正在反复崩溃 - 请检查日志. 在 Browsingway 重新启动之前将不会继续尝试重启渲染进程.");
+			Stop();
+			Rpc?.Dispose();
+			Rpc = null;
+			OnProcessCrashed();
 			return;
 		}
 
@@ -83,7 +119,8 @@ internal class RenderProcess : IDisposable
 				try
 				{
 					// process crashed, restart
-					Services.PluginLog.Error("Render process crashed - will restart asap");
+					_restartCount++;
+					Services.PluginLog.Error($"渲染进程崩溃 - 将立即重启 (第 {_restartCount}/{_maxRestarts} 次尝试).");
 					_process = SetupProcess();
 					_process.Start();
 					_process.BeginOutputReadLine();
@@ -97,7 +134,7 @@ internal class RenderProcess : IDisposable
 				}
 				catch (Exception e)
 				{
-					Services.PluginLog.Error(e, "Failed to restart render process");
+					Services.PluginLog.Error(e, "重启渲染进程失败");
 				}
 				finally
 				{
@@ -143,7 +180,7 @@ internal class RenderProcess : IDisposable
 				}
 				catch (Exception e)
 				{
-					Services.PluginLog.Error(e, "Failed to get process exit status");
+					Services.PluginLog.Error(e, "无法获取程序退出状态码");
 				}
 				finally
 				{

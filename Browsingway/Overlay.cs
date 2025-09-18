@@ -1,6 +1,8 @@
 using Browsingway.Common.Ipc;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Objects.Enums;
-using ImGuiNET;
+using Dalamud.Interface.Textures;
+using Dalamud.Interface.Utility;
 using System.Numerics;
 
 namespace Browsingway;
@@ -17,21 +19,25 @@ internal class Overlay : IDisposable
 
 	private bool _resizing;
 	private Vector2 _size;
+	private bool _hasRenderError = false;
 	private SharedTextureHandler? _textureHandler;
 	private Exception? _textureRenderException;
 	private bool _windowFocused;
 	private long _timeLastInCombat;
+	private ISharedImmediateTexture? _texErrorIcon;
 
-	public Overlay(RenderProcess renderProcess, InlayConfiguration overlayConfig)
+	public Overlay(RenderProcess renderProcess, InlayConfiguration overlayConfig, string pluginDir)
 	{
 		_renderProcess = renderProcess;
 		// TODO: handle that the correct way
 		_renderProcess.Crashed += (_, _) =>
 		{
 			_size = Vector2.Zero;
+			_hasRenderError = true;
 		};
 
 		_overlayConfig = overlayConfig;
+		_texErrorIcon = Services.TextureProvider.GetFromFile(Path.Combine(pluginDir, "dead.png"));
 	}
 
 	public Guid RenderGuid => _overlayConfig.Guid;
@@ -39,32 +45,32 @@ internal class Overlay : IDisposable
 	public void Dispose()
 	{
 		_textureHandler?.Dispose();
-		_ = _renderProcess.Rpc.RemoveOverlay(RenderGuid);
+		_ = _renderProcess.Rpc?.RemoveOverlay(RenderGuid);
 	}
 
 	public void Navigate(string newUrl)
 	{
-		_ = _renderProcess.Rpc.Navigate(RenderGuid, newUrl);
+		_ = _renderProcess.Rpc?.Navigate(RenderGuid, newUrl);
 	}
 
 	public void InjectUserCss(string css)
 	{
-		_ = _renderProcess.Rpc.InjectUserCss(RenderGuid, css);
+		_ = _renderProcess.Rpc?.InjectUserCss(RenderGuid, css);
 	}
 
 	public void Zoom(float zoom)
 	{
-		_ = _renderProcess.Rpc.Zoom(RenderGuid, zoom);
+		_ = _renderProcess.Rpc?.Zoom(RenderGuid, zoom);
 	}
 
 	public void Mute(bool mute)
 	{
-		_ = _renderProcess.Rpc.Mute(RenderGuid, mute);
+		_ = _renderProcess.Rpc?.Mute(RenderGuid, mute);
 	}
 
 	public void Debug()
 	{
-		_ = _renderProcess.Rpc.Debug(RenderGuid);
+		_ = _renderProcess.Rpc?.Debug(RenderGuid);
 	}
 
 	public void SetCursor(Cursor cursor)
@@ -99,7 +105,7 @@ internal class Overlay : IDisposable
 		// If the event isn't something we're tracking, bail early with no capture
 		if (eventType == null) { return (false, 0); }
 
-		_ = _renderProcess.Rpc.KeyEvent(RenderGuid, (int)msg, (int)wParam, (int)lParam);
+		_ = _renderProcess.Rpc?.KeyEvent(RenderGuid, (int)msg, (int)wParam, (int)lParam);
 
 		// We've handled the input, signal. For these message types, `0` signals a capture.
 		return (true, 0);
@@ -107,7 +113,7 @@ internal class Overlay : IDisposable
 
 	public void Render()
 	{
-		if (_overlayConfig.Hidden || _overlayConfig.Disabled || HiddenByCombatFlags())
+		if (_overlayConfig.Hidden || _overlayConfig.Disabled || HiddenByCombatFlags() || (_overlayConfig.HideInPvP && Services.ClientState.IsPvP))
 		{
 			_mouseInWindow = false;
 			return;
@@ -138,7 +144,7 @@ internal class Overlay : IDisposable
 		HandleWindowSize();
 
 		// TODO: Browsingway.Renderer can take some time to spin up properly, should add a loading state.
-		if (_textureHandler != null)
+		if (_textureHandler != null && !_hasRenderError)
 		{
 			HandleMouseEvent();
 
@@ -146,12 +152,28 @@ internal class Overlay : IDisposable
 			_textureHandler.Render();
 			ImGui.PopStyleVar();
 		}
-		else if (_textureRenderException != null)
+		else
 		{
-			ImGui.PushStyleColor(ImGuiCol.Text, 0xFF0000FF);
-			ImGui.Text("在构建嵌入式浏览器材质时发生问题:");
-			ImGui.Text(_textureRenderException.ToString());
-			ImGui.PopStyleColor();
+			if (_texErrorIcon is not null)
+			{
+				float lineHeight = ImGui.GetTextLineHeight();
+				float size = float.Min(_size.X - lineHeight * 3, _size.Y - lineHeight * 3);
+				ImGui.NewLine();
+				ImGuiHelpers.CenterCursorFor(size);
+				ImGui.Image(_texErrorIcon.GetWrapOrEmpty().Handle, new Vector2(size, size));
+
+				ImGui.PushStyleColor(ImGuiCol.Text, 0xFF0000FF);
+				if (_textureRenderException is not null)
+				{
+					ImGuiHelpers.CenteredText("在构建浏览器悬浮窗纹理时发生错误:");
+					ImGuiHelpers.CenteredText(_textureRenderException.ToString());
+				}
+				else
+				{
+					ImGuiHelpers.CenteredText("在构建浏览器悬浮窗纹理时发生错误. 请查看日志以获取详细信息.");
+				}
+				ImGui.PopStyleColor();
+			}
 		}
 
 		ImGui.End();
@@ -193,6 +215,7 @@ internal class Overlay : IDisposable
 	public void SetTexture(IntPtr handle)
 	{
 		_resizing = false;
+		_hasRenderError = false;
 
 		SharedTextureHandler? oldTextureHandler = _textureHandler;
 		try
@@ -240,7 +263,7 @@ internal class Overlay : IDisposable
 			if (_mouseInWindow)
 			{
 				_mouseInWindow = false;
-				_ = _renderProcess.Rpc.MouseButton(new MouseButtonMessage() { Guid = RenderGuid.ToByteArray(), X = (int)mousePos.X, Y = (int)mousePos.Y, Leaving = true });
+				_ = _renderProcess.Rpc?.MouseButton(new MouseButtonMessage() { Guid = RenderGuid.ToByteArray(), X = (int)mousePos.X, Y = (int)mousePos.Y, Leaving = true });
 			}
 
 			return;
@@ -264,7 +287,7 @@ internal class Overlay : IDisposable
 		if (io.KeyAlt) { modifier |= InputModifier.Alt; }
 
 		// TODO: Either this or the entire handler function should be asynchronous so we're not blocking the entire draw thread
-		_ = _renderProcess.Rpc.MouseButton(new MouseButtonMessage()
+		_ = _renderProcess.Rpc?.MouseButton(new MouseButtonMessage()
 		{
 			Guid = RenderGuid.ToByteArray(),
 			X = mousePos.X,
@@ -285,7 +308,7 @@ internal class Overlay : IDisposable
 
 		if (_size == Vector2.Zero)
 		{
-			_ = _renderProcess.Rpc.NewOverlay(new NewOverlayMessage()
+			_ = _renderProcess.Rpc?.NewOverlay(new NewOverlayMessage()
 			{
 				Guid = RenderGuid.ToByteArray(),
 				Id = _overlayConfig.Name,
@@ -300,7 +323,7 @@ internal class Overlay : IDisposable
 		}
 		else
 		{
-			_ = _renderProcess.Rpc.ResizeOverlay(RenderGuid, (int)currentSize.X, (int)currentSize.Y);
+			_ = _renderProcess.Rpc?.ResizeOverlay(RenderGuid, (int)currentSize.X, (int)currentSize.Y);
 		}
 
 		_resizing = true;
@@ -309,7 +332,7 @@ internal class Overlay : IDisposable
 
 	#region serde
 
-	private MouseButton EncodeMouseButtons(RangeAccessor<bool> buttons)
+	private MouseButton EncodeMouseButtons(Span<bool> buttons)
 	{
 		MouseButton result = MouseButton.None;
 		if (buttons[0]) { result |= MouseButton.Primary; }
@@ -341,22 +364,22 @@ internal class Overlay : IDisposable
 			case Cursor.NResize:
 			case Cursor.SResize:
 			case Cursor.NsResize:
-				return ImGuiMouseCursor.ResizeNS;
+				return ImGuiMouseCursor.ResizeNs;
 
 			case Cursor.EResize:
 			case Cursor.WResize:
 			case Cursor.EwResize:
-				return ImGuiMouseCursor.ResizeEW;
+				return ImGuiMouseCursor.ResizeEw;
 
 			case Cursor.NeResize:
 			case Cursor.SwResize:
 			case Cursor.NeswResize:
-				return ImGuiMouseCursor.ResizeNESW;
+				return ImGuiMouseCursor.ResizeNesw;
 
 			case Cursor.NwResize:
 			case Cursor.SeResize:
 			case Cursor.NwseResize:
-				return ImGuiMouseCursor.ResizeNWSE;
+				return ImGuiMouseCursor.ResizeNwse;
 		}
 
 		return ImGuiMouseCursor.Arrow;
