@@ -41,7 +41,7 @@ public class DependencyManager : IDisposable
 	private const short _depComplete = -2;
 	private const short _depFailed = -3;
 
-	private static readonly Dependency[] _dependencies = { new("https://oss.yarukon.me/browsingway/cefsharp-{VERSION}.zip", "cef", "134.3.9+g5dc6f2f+chromium-134.0.6998.178", "F761372E54962FBF1F8906EE864F8B92D3A3A5B4F5EA5C34EA12340907E0B41A") };
+	private static readonly Dependency[] _dependencies = { new("https://oss.yarukon.me/browsingway/cefsharp-{VERSION}.zip", "cef", "143.0.9+ge88e818+chromium-143.0.7499.40", "2911B142BE2B9F8555FD7A2FF28B47ADFFF531D4E509BD8E0020FA0771DADAA4") };
 	private readonly string _debugCheckDir;
 
 	private readonly string _dependencyDir;

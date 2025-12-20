@@ -392,18 +392,18 @@ internal class Overlay : IDisposable
 			return false;
 		}
 
-		if (Services.ClientState.LocalPlayer == null)
+		if (Services.ObjectTable.LocalPlayer == null)
 		{
 			return true;
 		}
 
-		if (Services.ClientState.LocalPlayer.StatusFlags.HasFlag(StatusFlags.InCombat))
+		if (Services.ObjectTable.LocalPlayer.StatusFlags.HasFlag(StatusFlags.InCombat))
 		{
 			_timeLastInCombat = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 			return false;
 		}
 
-		if (!Services.ClientState.LocalPlayer.StatusFlags.HasFlag(StatusFlags.InCombat) && _overlayConfig.HideDelay > 0)
+		if (!Services.ObjectTable.LocalPlayer.StatusFlags.HasFlag(StatusFlags.InCombat) && _overlayConfig.HideDelay > 0)
 		{
 			return DateTimeOffset.Now.ToUnixTimeMilliseconds() >= _timeLastInCombat + (_overlayConfig.HideDelay * 1000);
 		}
