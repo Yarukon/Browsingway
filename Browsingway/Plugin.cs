@@ -40,7 +40,7 @@ public class Plugin : IDalamudPlugin
 
 		_pluginConfigDir = pluginInterface.GetPluginConfigDirectory();
 
-		_runtimeDir = string.Format(@"{0}..\..\runtime", Services.PluginInterface.ConfigFile.DirectoryName);
+		_runtimeDir = @$"{Services.PluginInterface.ConfigFile.DirectoryName}..\..\runtime";
 		_actHandler = new ActHandler();
 
 		_dependencyManager = new DependencyManager(_pluginDir, _pluginConfigDir);
@@ -219,6 +219,15 @@ public class Plugin : IDalamudPlugin
 		_actHandler.Check();
 
 		foreach (Overlay overlay in _overlays.Values) { overlay.Render(); }
+
+		// Send game background to each overlay for compositing
+		foreach (Overlay overlay in _overlays.Values)
+		{
+			if (overlay.Disabled)
+				continue;
+
+			overlay.UpdateGameBackground();
+		}
 
 		ImGui.PopStyleVar();
 	}

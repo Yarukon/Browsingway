@@ -88,6 +88,7 @@ internal static class Program
 		_rpc.RemoveOverlay += RpcOnRemoveOverlay;
 		_rpc.ResizeOverlay += RpcOnResizeOverlay;
 		_rpc.InjectUserCss += RpcOnInjectUserCss;
+		_rpc.UpdateGameBackground += RpcOnUpdateGameBackground;
 	}
 
 	private static void RpcOnInjectUserCss(InjectUserCssMessage msg)
@@ -100,6 +101,30 @@ internal static class Program
 			var guid = new Guid(msg.Guid.Span);
 			if (_overlays.TryGetValue(guid, out var overlay))
 				overlay.InjectUserCss(msg.Css);
+		}
+	}
+
+	private static int _updateGameBgLogCount;
+	private static void RpcOnUpdateGameBackground(UpdateGameBackgroundMessage msg)
+	{
+		lock (_lockIpc)
+		{
+			if (_isShuttingDown)
+				return;
+
+			var guid = new Guid(msg.Guid.Span);
+			int logCount = Interlocked.Increment(ref _updateGameBgLogCount);
+			if (_overlays.TryGetValue(guid, out var overlay))
+			{
+				if (logCount <= 3)
+					Console.WriteLine($"RpcOnUpdateGameBackground: guid={guid} handle=0x{msg.TextureHandle:X} size={msg.Width}x{msg.Height} bufId={overlay.RenderHandler.FrameBufferId}");
+				overlay.RenderHandler.SetGameBackground((IntPtr)msg.TextureHandle, msg.Width, msg.Height);
+			}
+			else
+			{
+				if (logCount <= 3)
+					Console.Error.WriteLine($"RpcOnUpdateGameBackground: overlay NOT FOUND for guid={guid}");
+			}
 		}
 	}
 
@@ -160,7 +185,9 @@ internal static class Program
 				_ = _rpc.SetCursor(new SetCursorMessage() { Guid = msg.Guid, Cursor = cursor });
 			};
 
-			_ = _rpc.UpdateTexture(guid, renderHandler.SharedTextureHandle);
+			IntPtr texHandle = renderHandler.SharedTextureHandle;
+			Console.WriteLine($"RpcOnNewOverlay: id={msg.Id} size={msg.Width}x{msg.Height} textureHandle=0x{texHandle:X}");
+			_ = _rpc.UpdateTexture(guid, texHandle);
 		}
 	}
 

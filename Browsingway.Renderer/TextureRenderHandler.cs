@@ -6,6 +6,7 @@ using CefSharp.Structs;
 using TerraFX.Interop.DirectX;
 using TerraFX.Interop.Windows;
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using Range = CefSharp.Structs.Range;
 using Size = System.Drawing.Size;
 
@@ -13,6 +14,9 @@ namespace Browsingway.Renderer;
 
 internal unsafe class TextureRenderHandler : IRenderHandler
 {
+	// Global lock for D3D11 immediate context — not thread-safe across overlays
+	private static readonly object _d3dLock = new();
+
 	// CEF buffers are 32-bit BGRA
 	private const byte _bytesPerPixel = 4;
 
@@ -39,8 +43,30 @@ internal unsafe class TextureRenderHandler : IRenderHandler
 	private IntPtr _sharedTextureHandle = IntPtr.Zero;
 	private ID3D11Texture2D* _viewTexture;
 
+	// Game background readback
+	private ID3D11Texture2D* _gameBackgroundTexture;
+	private ID3D11Texture2D* _stagingTexture;
+	private int _stagingWidth;
+	private int _stagingHeight;
+	private DXGI_FORMAT _stagingFormat;
+	private Timer? _readbackTimer;
+	private bool _hasGameBackground;
+	private IntPtr _cachedGameBgHandle;
+	private int _openSharedFailCount;
+	private bool _disposed;
+	private bool _deviceLost;
+	private bool _firstPaintLogged;
+	private int _readbackCallCount;
+	private int _readbackSuccessCount;
+	private readonly int _frameBufferId;
+	private readonly GameBackgroundFrameBuffer _frameBuffer;
+
+	public int FrameBufferId => _frameBufferId;
+
 	public TextureRenderHandler(Size size)
 	{
+		_frameBufferId = GameBackgroundFrameBuffer.CreateBuffer();
+		_frameBuffer = GameBackgroundFrameBuffer.Get(_frameBufferId)!;
 		_sharedTexture = BuildViewTexture(size, true);
 		_viewTexture = BuildViewTexture(size, false);
 	}
@@ -71,17 +97,31 @@ internal unsafe class TextureRenderHandler : IRenderHandler
 
 	public void Dispose()
 	{
-		_sharedTexture->Release();
-		_viewTexture->Release();
-		if (_popupTexture != null)
+		_disposed = true;
+
+		// Stop the timer first, then wait for any in-flight callback to finish
+		_readbackTimer?.Dispose();
+		_readbackTimer = null;
+
+		// Acquire the D3D lock to ensure no timer callback is mid-execution
+		lock (_d3dLock)
 		{
-			_popupTexture->Release();
+			ReleaseGameBackgroundResources();
+
+			_sharedTexture->Release();
+			_viewTexture->Release();
+			if (_popupTexture != null)
+			{
+				_popupTexture->Release();
+			}
+
+			foreach (IntPtr texturePtr in _obsoleteTextures)
+			{
+				((ID3D11Texture2D*)texturePtr)->Release();
+			}
 		}
 
-		foreach (IntPtr texturePtr in _obsoleteTextures)
-		{
-			((ID3D11Texture2D*)texturePtr)->Release();
-		}
+		GameBackgroundFrameBuffer.RemoveBuffer(_frameBufferId);
 	}
 
 	public Rect GetViewRect()
@@ -107,14 +147,36 @@ internal unsafe class TextureRenderHandler : IRenderHandler
 
 	public void OnPaint(PaintElementType type, Rect dirtyRect, IntPtr buffer, int width, int height)
 	{
-		lock (_renderLock)
+		lock (_d3dLock)
 		{
+			if (_deviceLost || DxHandler.Device == null)
+			{
+				Console.Error.WriteLine("OnPaint skipped: device is lost or null");
+				return;
+			}
+
+			// Check device health before any D3D operations
+			HRESULT deviceHr = DxHandler.Device->GetDeviceRemovedReason();
+			if (deviceHr.FAILED)
+			{
+				Console.Error.WriteLine($"OnPaint: D3D device removed (reason={deviceHr}), stopping all rendering");
+				_deviceLost = true;
+				ReleaseGameBackgroundResources();
+				return;
+			}
+
 			ID3D11Texture2D* targetTexture = type switch
 			{
 				PaintElementType.View => _viewTexture,
 				PaintElementType.Popup => _popupTexture,
 				_ => throw new Exception($"Unknown paint type {type}")
 			};
+
+			if (!_firstPaintLogged)
+			{
+				_firstPaintLogged = true;
+				Console.WriteLine($"OnPaint first call: type={type} dirty=({dirtyRect.X},{dirtyRect.Y},{dirtyRect.Width},{dirtyRect.Height}) buffer={width}x{height}");
+			}
 
 			// keep buffer to make alpha checks later on.
 			// TODO: make this a back and front buffer to atomic swap them
@@ -274,9 +336,319 @@ internal unsafe class TextureRenderHandler : IRenderHandler
 	{
 	}
 
+	public void SetGameBackground(IntPtr sharedHandle, int width, int height)
+	{
+		lock (_d3dLock)
+		{
+			if (_disposed || _deviceLost || DxHandler.Device == null || sharedHandle == IntPtr.Zero || width <= 0 || height <= 0)
+			{
+				Console.Error.WriteLine($"SetGameBackground[buf={_frameBufferId}] skipped: disposed={_disposed} deviceLost={_deviceLost} device={DxHandler.Device != null} handle=0x{sharedHandle:X} size={width}x{height}");
+				ReleaseGameBackgroundResources();
+				_hasGameBackground = false;
+				_cachedGameBgHandle = IntPtr.Zero;
+				_openSharedFailCount = 0;
+				return;
+			}
+
+			// Skip if handle hasn't changed
+			if (sharedHandle == _cachedGameBgHandle && _hasGameBackground)
+				return;
+
+			// If handle changed, reset fail count
+			if (sharedHandle != _cachedGameBgHandle)
+				_openSharedFailCount = 0;
+
+			// Stop retrying after repeated failures with the same handle
+			if (_openSharedFailCount >= 3)
+				return;
+
+			// Check device health before opening shared resource
+			HRESULT deviceHr = DxHandler.Device->GetDeviceRemovedReason();
+			if (deviceHr.FAILED)
+			{
+				Console.Error.WriteLine($"SetGameBackground: device already removed (reason={deviceHr})");
+				_deviceLost = true;
+				return;
+			}
+
+			// Release old game background resources
+			ReleaseGameBackgroundResources();
+			_cachedGameBgHandle = sharedHandle;
+
+			// Open the shared texture from the plugin process
+			Guid texture2DGuid = typeof(ID3D11Texture2D).GUID;
+			void* texturePtr;
+			HRESULT hr = DxHandler.Device->OpenSharedResource((HANDLE)sharedHandle, &texture2DGuid, &texturePtr);
+			if (hr.FAILED)
+			{
+				_openSharedFailCount++;
+				if (_openSharedFailCount <= 3)
+					Console.Error.WriteLine($"Failed to open game background shared texture: {hr} (handle=0x{sharedHandle:X}, size={width}x{height}, attempt={_openSharedFailCount})");
+				_hasGameBackground = false;
+				return;
+			}
+
+			_gameBackgroundTexture = (ID3D11Texture2D*)texturePtr;
+
+			// Create staging texture matching the game texture format
+			D3D11_TEXTURE2D_DESC texDesc;
+			_gameBackgroundTexture->GetDesc(&texDesc);
+			Console.WriteLine($"Game background texture opened: {texDesc.Width}x{texDesc.Height} format={texDesc.Format} handle=0x{sharedHandle:X}");
+			EnsureStagingTexture((int)texDesc.Width, (int)texDesc.Height, texDesc.Format);
+
+			if (_stagingTexture == null)
+			{
+				Console.Error.WriteLine("Staging texture creation failed, aborting game background setup.");
+				ReleaseGameBackgroundResources();
+				_hasGameBackground = false;
+				return;
+			}
+
+			_hasGameBackground = true;
+			_openSharedFailCount = 0;
+			Console.WriteLine($"Game background readback timer started for frameBufferId={_frameBufferId}.");
+			StartReadbackTimer();
+		}
+	}
+
+	private void EnsureStagingTexture(int width, int height, DXGI_FORMAT format)
+	{
+		if (_stagingTexture != null && _stagingWidth == width && _stagingHeight == height && _stagingFormat == format)
+			return;
+
+		ReleaseStagingTexture();
+
+		D3D11_TEXTURE2D_DESC desc = new()
+		{
+			Width = (uint)width,
+			Height = (uint)height,
+			MipLevels = 1,
+			ArraySize = 1,
+			Format = format,
+			SampleDesc = new DXGI_SAMPLE_DESC { Count = 1, Quality = 0 },
+			Usage = D3D11_USAGE.D3D11_USAGE_STAGING,
+			BindFlags = 0,
+			CPUAccessFlags = (uint)D3D11_CPU_ACCESS_FLAG.D3D11_CPU_ACCESS_READ,
+			MiscFlags = 0
+		};
+
+		ID3D11Texture2D* staging;
+		HRESULT hr = DxHandler.Device->CreateTexture2D(&desc, null, &staging);
+		if (hr.FAILED)
+		{
+			Console.Error.WriteLine($"Failed to create staging texture: {hr}");
+			return;
+		}
+
+		_stagingTexture = staging;
+		_stagingWidth = width;
+		_stagingHeight = height;
+		_stagingFormat = format;
+	}
+
+	private void StartReadbackTimer()
+	{
+		if (_readbackTimer != null) return;
+		// ~60fps readback to minimize latency
+		_readbackTimer = new Timer(ReadbackTimerCallback, null, 0, 16);
+	}
+
+	private void StopReadbackTimer()
+	{
+		_readbackTimer?.Dispose();
+		_readbackTimer = null;
+	}
+
+	private void ReadbackTimerCallback(object? state)
+	{
+		int callNum = Interlocked.Increment(ref _readbackCallCount);
+
+		if (_disposed || !_hasGameBackground || _deviceLost)
+		{
+			if (callNum <= 3)
+				Console.Error.WriteLine($"ReadbackTimer[buf={_frameBufferId}] early exit: disposed={_disposed} hasGameBg={_hasGameBackground} deviceLost={_deviceLost}");
+			return;
+		}
+
+		if (callNum <= 3)
+			Console.WriteLine($"ReadbackTimer[buf={_frameBufferId}] callback #{callNum}, waiting for lock...");
+
+		try
+		{
+			lock (_d3dLock)
+			{
+				if (_disposed || !_hasGameBackground || _deviceLost || _gameBackgroundTexture == null || _stagingTexture == null)
+				{
+					if (callNum <= 3)
+						Console.Error.WriteLine($"ReadbackTimer[buf={_frameBufferId}] inner check failed: gameBgTex={(_gameBackgroundTexture != null)} stagingTex={(_stagingTexture != null)}");
+					return;
+				}
+
+				if (DxHandler.Device == null)
+					return;
+
+				// Check if device is still healthy BEFORE any GPU work
+				HRESULT deviceHr = DxHandler.Device->GetDeviceRemovedReason();
+				if (deviceHr.FAILED)
+				{
+					Console.Error.WriteLine($"ReadbackTimer: D3D device already removed before CopyResource (reason={deviceHr})");
+					_deviceLost = true;
+					_hasGameBackground = false;
+					StopReadbackTimer();
+					return;
+				}
+
+				ID3D11DeviceContext* context;
+				DxHandler.Device->GetImmediateContext(&context);
+
+				// GPU copy: game texture → staging texture
+				context->CopyResource((ID3D11Resource*)_stagingTexture, (ID3D11Resource*)_gameBackgroundTexture);
+				context->Flush();
+
+				// Check device health AFTER CopyResource — this is where stale textures kill the device
+				deviceHr = DxHandler.Device->GetDeviceRemovedReason();
+				if (deviceHr.FAILED)
+				{
+					Console.Error.WriteLine($"ReadbackTimer: D3D device removed AFTER CopyResource (reason={deviceHr}). Game background texture may be stale.");
+					_deviceLost = true;
+					_hasGameBackground = false;
+					StopReadbackTimer();
+					context->Release();
+					return;
+				}
+
+				// Map staging texture for CPU read
+				D3D11_MAPPED_SUBRESOURCE mapped;
+				HRESULT hr = context->Map((ID3D11Resource*)_stagingTexture, 0, D3D11_MAP.D3D11_MAP_READ, 0, &mapped);
+				if (hr.SUCCEEDED && mapped.pData != null && mapped.RowPitch > 0)
+				{
+					int w = _stagingWidth;
+					int h = _stagingHeight;
+					int srcRowPitch = (int)mapped.RowPitch;
+					int dstRowPitch = w * 4;
+					int imageSize = dstRowPitch * h;
+					int fileSize = 54 + imageSize;
+					bool needSwapRB = _stagingFormat == DXGI_FORMAT.DXGI_FORMAT_R8G8B8A8_UNORM;
+
+					// Get reusable BMP buffer and always write header
+					byte[] bmp = _frameBuffer.GetReusableBuffer(fileSize);
+					WriteBmpHeader(bmp, w, h, fileSize, imageSize);
+
+					// Copy GPU mapped memory directly into BMP pixel area (offset 54)
+					byte* srcBase = (byte*)mapped.pData;
+					if (srcRowPitch == dstRowPitch)
+					{
+						// Row pitch matches — single bulk copy
+						Marshal.Copy((IntPtr)srcBase, bmp, 54, imageSize);
+					}
+					else
+					{
+						// Row pitch differs — copy row by row
+						for (int y = 0; y < h; y++)
+						{
+							Marshal.Copy((IntPtr)(srcBase + y * srcRowPitch), bmp, 54 + y * dstRowPitch, dstRowPitch);
+						}
+					}
+
+					context->Unmap((ID3D11Resource*)_stagingTexture, 0);
+
+					// In-place R/B swap if needed (rare — game usually uses B8G8R8A8)
+					if (needSwapRB)
+					{
+						for (int i = 54; i < 54 + imageSize; i += 4)
+						{
+							(bmp[i], bmp[i + 2]) = (bmp[i + 2], bmp[i]);
+						}
+					}
+
+					_frameBuffer.UpdateFrame(bmp, fileSize);
+					int successNum = Interlocked.Increment(ref _readbackSuccessCount);
+					if (successNum <= 3 || successNum % 300 == 0)
+						Console.WriteLine($"ReadbackTimer[buf={_frameBufferId}] frame produced: {w}x{h} size={fileSize} [#{successNum}]");
+				}
+				else if (hr.SUCCEEDED)
+				{
+					// Map succeeded but data is invalid
+					Console.Error.WriteLine("ReadbackTimer: Map succeeded but pData is null or RowPitch is 0");
+					context->Unmap((ID3D11Resource*)_stagingTexture, 0);
+				}
+				else
+				{
+					Console.Error.WriteLine($"ReadbackTimer: Map failed with hr={hr}");
+				}
+
+				context->Release();
+			}
+		}
+		catch (Exception ex)
+		{
+			Console.Error.WriteLine($"ReadbackTimerCallback error: {ex.Message}");
+			_hasGameBackground = false;
+			_cachedGameBgHandle = IntPtr.Zero;
+			StopReadbackTimer();
+		}
+	}
+
+	private static void WriteBmpHeader(byte[] bmp, int width, int height, int fileSize, int imageSize)
+	{
+		// BMP file header (14 bytes)
+		bmp[0] = (byte)'B';
+		bmp[1] = (byte)'M';
+		bmp[2] = (byte)(fileSize);
+		bmp[3] = (byte)(fileSize >> 8);
+		bmp[4] = (byte)(fileSize >> 16);
+		bmp[5] = (byte)(fileSize >> 24);
+		bmp[6] = 0; bmp[7] = 0; bmp[8] = 0; bmp[9] = 0; // reserved
+		bmp[10] = 54; bmp[11] = 0; bmp[12] = 0; bmp[13] = 0; // pixel data offset
+
+		// DIB header (BITMAPINFOHEADER, 40 bytes)
+		bmp[14] = 40; bmp[15] = 0; bmp[16] = 0; bmp[17] = 0; // header size
+		bmp[18] = (byte)(width);
+		bmp[19] = (byte)(width >> 8);
+		bmp[20] = (byte)(width >> 16);
+		bmp[21] = (byte)(width >> 24);
+		int negHeight = -height;
+		bmp[22] = (byte)(negHeight);
+		bmp[23] = (byte)(negHeight >> 8);
+		bmp[24] = (byte)(negHeight >> 16);
+		bmp[25] = (byte)(negHeight >> 24);
+		bmp[26] = 1; bmp[27] = 0; // planes
+		bmp[28] = 32; bmp[29] = 0; // bpp
+		bmp[30] = 0; bmp[31] = 0; bmp[32] = 0; bmp[33] = 0; // compression
+		bmp[34] = (byte)(imageSize);
+		bmp[35] = (byte)(imageSize >> 8);
+		bmp[36] = (byte)(imageSize >> 16);
+		bmp[37] = (byte)(imageSize >> 24);
+		for (int i = 38; i < 54; i++) bmp[i] = 0;
+	}
+
+	private void ReleaseStagingTexture()
+	{
+		if (_stagingTexture != null)
+		{
+			_stagingTexture->Release();
+			_stagingTexture = null;
+		}
+		_stagingWidth = 0;
+		_stagingHeight = 0;
+	}
+
+	private void ReleaseGameBackgroundResources()
+	{
+		StopReadbackTimer();
+		ReleaseStagingTexture();
+		if (_gameBackgroundTexture != null)
+		{
+			_gameBackgroundTexture->Release();
+			_gameBackgroundTexture = null;
+		}
+		_hasGameBackground = false;
+		_frameBuffer.Clear();
+	}
+
 	public void Resize(Size size)
 	{
-		lock (_renderLock)
+		lock (_d3dLock)
 		{
 			// TODO: make this thread unsafe crap thread safe crap
 			ID3D11Texture2D* oldTexture1 = _sharedTexture;
@@ -294,7 +666,7 @@ internal unsafe class TextureRenderHandler : IRenderHandler
 
 	protected byte GetAlphaAt(int x, int y)
 	{
-		lock (_renderLock)
+		lock (_d3dLock)
 		{
 			int rowPitch = _alphaLookupBufferWidth * _bytesPerPixel;
 
@@ -336,9 +708,11 @@ internal unsafe class TextureRenderHandler : IRenderHandler
 		HRESULT hr = DxHandler.Device->CreateTexture2D(&desc, null, &texture);
 		if (hr.FAILED)
 		{
+			Console.Error.WriteLine($"BuildViewTexture failed: {hr} (size={size.Width}x{size.Height}, shared={isShared})");
 			throw new Exception($"Failed to create texture: {hr}");
 		}
 
+		Console.WriteLine($"BuildViewTexture: {size.Width}x{size.Height} shared={isShared} ok");
 		return texture;
 	}
 

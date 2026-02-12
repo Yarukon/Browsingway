@@ -17,6 +17,7 @@ table RpcCall(fs_serializer) {
     RemoveOverlay: RemoveOverlayMessage;
     MouseButton: MouseButtonMessage;
     KeyEvent: KeyEventMessage;
+    UpdateGameBackground: UpdateGameBackgroundMessage;
     
     // Renderer -> Plugin
     RendererReady: RendererReadyMessage;

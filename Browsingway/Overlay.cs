@@ -26,6 +26,12 @@ internal class Overlay : IDisposable
 	private long _timeLastInCombat;
 	private ISharedImmediateTexture? _texErrorIcon;
 
+	// Overlay screen position for game background capture
+	private Vector2 _windowPos;
+	private Vector2 _contentMin;
+	private IntPtr _lastGameBgHandle;
+	private GameTextureCapture? _gameTextureCapture;
+
 	public Overlay(RenderProcess renderProcess, InlayConfiguration overlayConfig, string pluginDir)
 	{
 		_renderProcess = renderProcess;
@@ -34,6 +40,7 @@ internal class Overlay : IDisposable
 		{
 			_size = Vector2.Zero;
 			_hasRenderError = true;
+			_lastGameBgHandle = IntPtr.Zero;
 		};
 
 		_overlayConfig = overlayConfig;
@@ -42,9 +49,12 @@ internal class Overlay : IDisposable
 
 	public Guid RenderGuid => _overlayConfig.Guid;
 
+	public bool Disabled => _overlayConfig.Disabled;
+
 	public void Dispose()
 	{
 		_textureHandler?.Dispose();
+		_gameTextureCapture?.Dispose();
 		_ = _renderProcess.Rpc?.RemoveOverlay(RenderGuid);
 	}
 
@@ -143,6 +153,10 @@ internal class Overlay : IDisposable
 
 		HandleWindowSize();
 
+		// Track window position for game background capture
+		_windowPos = ImGui.GetWindowPos();
+		_contentMin = ImGui.GetWindowContentRegionMin();
+
 		// TODO: Browsingway.Renderer can take some time to spin up properly, should add a loading state.
 		if (_textureHandler != null && !_hasRenderError)
 		{
@@ -225,6 +239,48 @@ internal class Overlay : IDisposable
 		catch (Exception e) { _textureRenderException = e; }
 
 		if (oldTextureHandler != null) { oldTextureHandler.Dispose(); }
+
+		// Force resend of game background handle — the renderer overlay now exists
+		// and can receive it (previous sends may have arrived before overlay creation)
+		_lastGameBgHandle = IntPtr.Zero;
+	}
+
+	/// <summary>
+	/// Returns the overlay's screen-space position and content size for game background cropping.
+	/// </summary>
+	public (int x, int y, int w, int h) GetScreenRect()
+	{
+		Vector2 pos = _windowPos + _contentMin;
+		return ((int)pos.X, (int)pos.Y, (int)_size.X, (int)_size.Y);
+	}
+
+	/// <summary>
+	/// Captures the game background for this overlay and sends it to the renderer via IPC.
+	/// Each overlay has its own GameTextureCapture to avoid handle invalidation
+	/// when overlays have different sizes.
+	/// </summary>
+	public void UpdateGameBackground()
+	{
+		if (_size == Vector2.Zero || _renderProcess.Rpc == null)
+			return;
+
+		_gameTextureCapture ??= new GameTextureCapture();
+
+		var (x, y, w, h) = GetScreenRect();
+		if (!_gameTextureCapture.CaptureForOverlay(x, y, w, h))
+			return;
+
+		// Only send IPC when the handle changes — content updates are visible
+		// through the shared texture automatically
+		if (_gameTextureCapture.SharedHandle != _lastGameBgHandle)
+		{
+			_lastGameBgHandle = _gameTextureCapture.SharedHandle;
+			_ = _renderProcess.Rpc.UpdateGameBackground(
+				RenderGuid,
+				(ulong)_gameTextureCapture.SharedHandle,
+				_gameTextureCapture.Width,
+				_gameTextureCapture.Height);
+		}
 	}
 
 	private void HandleMouseEvent()

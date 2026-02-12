@@ -7,7 +7,7 @@ namespace Browsingway.Renderer;
 internal static class CefHandler
 {
 	public static string RootCachePath { get; private set; } = null!;
-	
+
 	public static void Initialise(string cefAssemblyPath, string cefCacheDir, int parentPid)
 	{
 		CefSettings settings = new()
@@ -32,6 +32,16 @@ internal static class CefHandler
 		settings.EnableAudio();
 		settings.SetOffScreenRenderingBestPerformanceArgs();
 		settings.UserAgentProduct = $"Chrome/{Cef.ChromiumVersion} Browsingway/{Assembly.GetEntryAssembly()?.GetName().Version} (ffxiv_pid {parentPid}; renderer_pid {Environment.ProcessId})";
+
+		settings.RegisterScheme(new CefCustomScheme
+		{
+			SchemeName = "gamebg",
+			SchemeHandlerFactory = new GameBackgroundSchemeHandlerFactory(),
+			IsStandard = true,
+			IsLocal = false,
+			IsCorsEnabled = true,
+			IsSecure = true
+		});
 
 		Cef.Initialize(settings, false, browserProcessHandler: null);
 	}

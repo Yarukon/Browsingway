@@ -52,7 +52,10 @@ internal class Overlay : IDisposable
 			PersistSessionCookies = true
 		};
 		var rc = new RequestContext(requestContextSettings);
+		// Register gamebg scheme on this context — global registration doesn't propagate to custom contexts
+		rc.RegisterSchemeHandlerFactory("gamebg", null, new GameBackgroundSchemeHandlerFactory());
 
+		Console.WriteLine($"Overlay[{_id}] creating browser for URL: {_url}");
 		_browser = new ChromiumWebBrowser(_url, automaticallyCreateBrowser: false, requestContext: rc);
 		_browser.RenderHandler = RenderHandler;
 		_browser.MenuHandler = new CefMenuHandler();
@@ -65,16 +68,19 @@ internal class Overlay : IDisposable
 		// WindowInfo gets ignored sometimes, be super sure:
 		_browser.BrowserInitialized += (_, _) =>
 		{
+			Console.WriteLine($"Overlay[{_id}] BrowserInitialized, setting size to {size.Width}x{size.Height}");
 			_browser.Size = new Size(size.Width, size.Height);
 			Mute(_muted);
 		};
 
 		_browser.LoadingStateChanged += (_, args) =>
 		{
+			Console.WriteLine($"Overlay[{_id}] LoadingStateChanged: IsLoading={args.IsLoading}");
 			if (!args.IsLoading)
 			{
 				_browser.SetZoomLevel(ScaleZoomLevel(_zoom));
 				InjectUserCss(_customCss);
+				InjectGameBackgroundCanvas();
 			}
 		};
 
@@ -82,6 +88,7 @@ internal class Overlay : IDisposable
 
 		// Ready, boot up the _browser
 		_browser.CreateBrowser(windowInfo, browserSettings);
+		Console.WriteLine($"Overlay[{_id}] CreateBrowser called");
 
 		browserSettings.Dispose();
 		windowInfo.Dispose();
@@ -106,6 +113,38 @@ internal class Overlay : IDisposable
 		_browser.GetMainFrame().ExecuteJavaScriptAsync(
 			"(()=>{const style = document.getElementById('user-css') ?? document.createElement('style');"
 			+ "style.id = 'user-css'; style.textContent =`" + css + " `;document.head.append(style);})()");
+	}
+
+	private void InjectGameBackgroundCanvas()
+	{
+		int bufferId = RenderHandler.FrameBufferId;
+		_browser?.GetMainFrame()?.ExecuteJavaScriptAsync(
+			"(()=>{" +
+			"if(document.getElementById('bw-game-bg-canvas'))return;" +
+			"const c=document.createElement('canvas');" +
+			"c.id='bw-game-bg-canvas';" +
+			"c.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2147483647;pointer-events:none;';" +
+			"document.documentElement.appendChild(c);" +
+			"const ctx=c.getContext('2d');" +
+			"const img=new Image();" +
+			"img.crossOrigin='anonymous';" +
+			"function update(){" +
+			"img.src='';" +
+			"img.src='gamebg://localhost/frame?id=" + bufferId + "&t='+Date.now();" +
+			"}" +
+			"img.onload=function(){" +
+			"if(img.naturalWidth>0&&img.naturalHeight>0){" +
+			"c.width=img.naturalWidth;c.height=img.naturalHeight;" +
+			"ctx.drawImage(img,0,0);" +
+			"}" +
+			"setTimeout(update,16);" +
+			"};" +
+			"img.onerror=function(){" +
+			"setTimeout(update,50);" +
+			"};" +
+			"update();" +
+			"})();"
+		);
 	}
 
 	public void Navigate(string newUrl)

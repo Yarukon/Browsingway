@@ -69,3 +69,10 @@ table KeyEventMessage (fs_serializer) {
     WParam : int;
     LParam : int;
 }
+
+table UpdateGameBackgroundMessage (fs_serializer) {
+    Guid : [ubyte] (required);
+    TextureHandle : ulong;
+    Width : int;
+    Height : int;
+}

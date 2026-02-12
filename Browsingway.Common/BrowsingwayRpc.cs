@@ -62,6 +62,11 @@ public class BrowsingwayRpc(string name) : IpcBase(name)
 		await SendCall(new RpcCall() { KeyEvent = new KeyEventMessage() { Guid = id.ToByteArray(), Msg = msg, WParam = wParam, LParam = lParam } });
 	}
 
+	public async Task UpdateGameBackground(Guid id, ulong textureHandle, int width, int height)
+	{
+		await SendCall(new RpcCall() { UpdateGameBackground = new UpdateGameBackgroundMessage() { Guid = id.ToByteArray(), TextureHandle = textureHandle, Width = width, Height = height } });
+	}
+
 	protected override void HandleCall(RpcCall call)
 	{
 		switch (call)

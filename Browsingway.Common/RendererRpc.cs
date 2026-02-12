@@ -16,6 +16,7 @@ public class RendererRpc(string name) : IpcBase(name)
 	public event Action<RemoveOverlayMessage>? RemoveOverlay;
 	public event Action<MouseButtonMessage>? MouseButton;
 	public event Action<KeyEventMessage>? KeyEvent;
+	public event Action<UpdateGameBackgroundMessage>? UpdateGameBackground;
 
 	public async Task RendererReady(bool bHasDxSharedTexturesSupport)
 	{
@@ -65,6 +66,9 @@ public class RendererRpc(string name) : IpcBase(name)
 				break;
 			case { KeyEvent: not null }:
 				KeyEvent?.Invoke(call.KeyEvent);
+				break;
+			case { UpdateGameBackground: not null }:
+				UpdateGameBackground?.Invoke(call.UpdateGameBackground);
 				break;
 		}
 	}
