@@ -40,7 +40,7 @@ public class Plugin : IDalamudPlugin
 
 		_pluginConfigDir = pluginInterface.GetPluginConfigDirectory();
 
-		_runtimeDir = string.Format(@"{0}..\..\runtime", Services.PluginInterface.ConfigFile.DirectoryName);
+		_runtimeDir = @$"{Services.PluginInterface.ConfigFile.DirectoryName}..\..\runtime";
 		_actHandler = new ActHandler();
 
 		_dependencyManager = new DependencyManager(_pluginDir, _pluginConfigDir);
